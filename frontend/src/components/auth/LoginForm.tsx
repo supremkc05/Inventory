@@ -1,4 +1,5 @@
 import { AuthInput } from "@/components/auth/AuthInput";
+import { GoogleIcon, LockIcon, MailIcon } from "@/components/auth/AuthIcons";
 import type { LoginFormValues } from "@/types/auth";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -14,7 +15,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     password: "",
     remember: true,
   });
-  const [errors, setErrors] = useState<Partial<Record<keyof LoginFormValues, string>>>({});
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof LoginFormValues, string>>
+  >({});
   const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
@@ -36,7 +39,6 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     if (!validate()) return;
 
     setSubmitting(true);
-    // Frontend-only for now — wire to JWT auth later
     await new Promise((r) => setTimeout(r, 600));
     setSubmitting(false);
     onSuccess?.();
@@ -50,55 +52,66 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         name="email"
         type="email"
         autoComplete="email"
-        placeholder="you@business.com"
+        placeholder="Enter your email"
         value={values.email}
         error={errors.email}
+        icon={<MailIcon className="h-4 w-4" />}
         onChange={(e) => setValues((v) => ({ ...v, email: e.target.value }))}
       />
 
-      <AuthInput
-        label="Password"
-        name="password"
-        type="password"
-        autoComplete="current-password"
-        placeholder="••••••••"
-        value={values.password}
-        error={errors.password}
-        onChange={(e) => setValues((v) => ({ ...v, password: e.target.value }))}
-      />
-
-      <div className="flex items-center justify-between text-sm">
-        <label className="flex items-center gap-2 text-slate-600">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
-            checked={values.remember}
-            onChange={(e) =>
-              setValues((v) => ({ ...v, remember: e.target.checked }))
-            }
-          />
-          Remember me
-        </label>
-        <button
-          type="button"
-          className="font-medium text-red-600 hover:text-red-700"
-        >
-          Forgot password?
-        </button>
+      <div>
+        <AuthInput
+          label="Password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          value={values.password}
+          error={errors.password}
+          icon={<LockIcon className="h-4 w-4" />}
+          showPasswordToggle
+          onChange={(e) =>
+            setValues((v) => ({ ...v, password: e.target.value }))
+          }
+        />
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            className="text-sm font-medium text-red-600 hover:text-red-700"
+          >
+            Forgot password?
+          </button>
+        </div>
       </div>
 
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-red-600/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+        className="mt-1 w-full rounded-lg bg-red-600 px-4 py-3 text-[15px] font-semibold text-white shadow-md shadow-red-600/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
       >
-        {submitting ? "Signing in…" : "Log in"}
+        {submitting ? "Logging in…" : "Login"}
       </button>
 
-      <p className="text-center text-sm text-slate-600">
-        New to DokanDaftar?{" "}
-        <Link to="/signup" className="font-semibold text-red-600 hover:text-red-700">
-          Create an account
+      <div className="relative py-1 text-center text-sm text-slate-400">
+        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-200" />
+        <span className="relative bg-white px-3">or</span>
+      </div>
+
+      <button
+        type="button"
+        className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-slate-200 bg-white px-4 py-[11px] text-sm font-medium text-slate-700 transition hover:border-red-200 hover:bg-rose-50"
+      >
+        <GoogleIcon className="h-5 w-5" />
+        Continue with Google
+      </button>
+
+      <p className="pt-2 text-center text-sm text-slate-600">
+        Don&apos;t have an account?{" "}
+        <Link
+          to="/signup"
+          className="font-semibold text-red-600 hover:text-red-700"
+        >
+          Sign up
         </Link>
       </p>
     </form>

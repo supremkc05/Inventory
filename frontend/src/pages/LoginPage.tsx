@@ -1,12 +1,11 @@
-import { AuthLayout, AuthTabs, LoginForm } from "@/components/auth";
+import { AuthLayout, LoginForm } from "@/components/auth";
 
 export default function LoginPage() {
   return (
     <AuthLayout
-      title="Welcome back"
-      subtitle="Log in to manage inventory, billing, and VAT for your business."
+      title="Welcome back!"
+      subtitle="Login to continue to your account"
     >
-      <AuthTabs mode="login" />
       <LoginForm />
     </AuthLayout>
   );

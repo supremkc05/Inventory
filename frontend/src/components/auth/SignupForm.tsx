@@ -1,4 +1,11 @@
 import { AuthInput } from "@/components/auth/AuthInput";
+import {
+  GoogleIcon,
+  LockIcon,
+  MailIcon,
+  StoreIcon,
+  UserIcon,
+} from "@/components/auth/AuthIcons";
 import type { SignupFormValues } from "@/types/auth";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -52,64 +59,76 @@ export function SignupForm() {
     if (!validate()) return;
 
     setSubmitting(true);
-    // Frontend-only — create Business + User via API later
     await new Promise((r) => setTimeout(r, 700));
     setSubmitting(false);
     navigate("/pricing");
   };
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-      <AuthInput
-        label="Business name"
-        name="businessName"
-        autoComplete="organization"
-        placeholder="Shree Kirana Store"
-        value={values.businessName}
-        error={errors.businessName}
-        onChange={(e) => update("businessName", e.target.value)}
-      />
+    <form className="space-y-3" onSubmit={handleSubmit} noValidate>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <AuthInput
+          label="Business name"
+          name="businessName"
+          autoComplete="organization"
+          placeholder="Kirana Store"
+          value={values.businessName}
+          error={errors.businessName}
+          icon={<StoreIcon className="h-4 w-4" />}
+          className="py-2.5"
+          onChange={(e) => update("businessName", e.target.value)}
+        />
+        <AuthInput
+          label="Your name"
+          name="fullName"
+          autoComplete="name"
+          placeholder="Your name"
+          value={values.fullName}
+          error={errors.fullName}
+          icon={<UserIcon className="h-4 w-4" />}
+          className="py-2.5"
+          onChange={(e) => update("fullName", e.target.value)}
+        />
+      </div>
 
       <AuthInput
-        label="Your name"
-        name="fullName"
-        autoComplete="name"
-        placeholder="Ram Bahadur"
-        value={values.fullName}
-        error={errors.fullName}
-        onChange={(e) => update("fullName", e.target.value)}
-      />
-
-      <AuthInput
-        label="Work email"
+        label="Email"
         name="email"
         type="email"
         autoComplete="email"
-        placeholder="owner@store.com"
+        placeholder="Enter your email"
         value={values.email}
         error={errors.email}
+        icon={<MailIcon className="h-4 w-4" />}
+        className="py-2.5"
         onChange={(e) => update("email", e.target.value)}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         <AuthInput
           label="Password"
           name="password"
           type="password"
           autoComplete="new-password"
-          placeholder="••••••••"
+          placeholder="Password"
           value={values.password}
           error={errors.password}
+          icon={<LockIcon className="h-4 w-4" />}
+          showPasswordToggle
+          className="py-2.5"
           onChange={(e) => update("password", e.target.value)}
         />
         <AuthInput
-          label="Confirm password"
+          label="Confirm"
           name="confirmPassword"
           type="password"
           autoComplete="new-password"
-          placeholder="••••••••"
+          placeholder="Confirm"
           value={values.confirmPassword}
           error={errors.confirmPassword}
+          icon={<LockIcon className="h-4 w-4" />}
+          showPasswordToggle
+          className="py-2.5"
           onChange={(e) => update("confirmPassword", e.target.value)}
         />
       </div>
@@ -143,15 +162,31 @@ export function SignupForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-red-600/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+        className="w-full rounded-lg bg-red-600 px-4 py-3 text-[15px] font-semibold text-white shadow-md shadow-red-600/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
       >
-        {submitting ? "Creating account…" : "Create account"}
+        {submitting ? "Creating account…" : "Sign up"}
       </button>
 
-      <p className="text-center text-sm text-slate-600">
+      <div className="relative py-0.5 text-center text-sm text-slate-400">
+        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-200" />
+        <span className="relative bg-white px-3">or</span>
+      </div>
+
+      <button
+        type="button"
+        className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-slate-200 bg-white px-4 py-[11px] text-sm font-medium text-slate-700 transition hover:border-red-200 hover:bg-rose-50"
+      >
+        <GoogleIcon className="h-5 w-5" />
+        Continue with Google
+      </button>
+
+      <p className="pt-1 text-center text-sm text-slate-600">
         Already have an account?{" "}
-        <Link to="/login" className="font-semibold text-red-600 hover:text-red-700">
-          Log in
+        <Link
+          to="/login"
+          className="font-semibold text-red-600 hover:text-red-700"
+        >
+          Login
         </Link>
       </p>
     </form>
