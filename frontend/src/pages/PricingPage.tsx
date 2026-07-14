@@ -1,45 +1,85 @@
+import { BillingToggle, PlanCard } from "@/components/pricing";
 import { SITE } from "@/constants/landing";
+import {
+  PLANS,
+  type BillingPeriod,
+} from "@/constants/pricing";
 import logo from "@/assets/image.png";
+import { EASE_OUT_EXPO } from "@/lib/motion";
+import { motion } from "framer-motion";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
-/**
- * Placeholder pricing page — full plans UI comes next.
- * Signup/login currently redirect here in the product flow.
- */
 export default function PricingPage() {
+  const [billing, setBilling] = useState<BillingPeriod>("annual");
+
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center bg-slate-50 px-6">
-      <Link to="/" className="mb-8 flex items-center gap-2.5">
-        <img src={logo} alt={SITE.name} className="h-10 w-10 object-contain" />
-        <span className="text-lg font-semibold text-slate-900">
-          Dokan<span className="text-red-600">Daftar</span>
-        </span>
-      </Link>
-      <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-widest text-red-600">
-          Next up
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold text-slate-900">
-          Pricing page
-        </h1>
-        <p className="mt-3 text-slate-600">
-          You&apos;re signed in to the flow. We&apos;ll build plan cards and
-          checkout here next — then the real dashboard.
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link
-            to="/"
-            className="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Back to home
+    <div className="relative min-h-svh overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 bg-slate-100" aria-hidden />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ backgroundColor: "rgba(255, 255, 255, 0.6)" }}
+        aria-hidden
+      />
+
+      <div className="relative z-10 mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <header className="flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2.5">
+            <img src={logo} alt="" className="h-9 w-9 object-contain" />
+            <span className="text-lg font-semibold text-slate-900">
+              Dokan<span className="text-red-600">Daftar</span>
+            </span>
           </Link>
           <Link
-            to="/signup"
-            className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+            to="/login"
+            className="text-sm font-semibold text-slate-600 hover:text-slate-900"
           >
-            Back to signup
+            Sign in
           </Link>
-        </div>
+        </header>
+
+        <motion.div
+          className="mx-auto mt-12 max-w-2xl text-center sm:mt-16"
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: EASE_OUT_EXPO }}
+        >
+          <p className="text-sm font-semibold uppercase tracking-widest text-red-600">
+            Pricing in NPR
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+            Simple pricing for Nepali shops
+          </h1>
+          <p className="mt-3 text-base text-slate-600 sm:text-lg">
+            Built for {SITE.tagline.toLowerCase()} inventory, VAT bills, and
+            udhaaro in rupees you recognise.
+          </p>
+        </motion.div>
+
+        <motion.div
+          className="mt-10"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.08, ease: EASE_OUT_EXPO }}
+        >
+          <BillingToggle value={billing} onChange={setBilling} />
+        </motion.div>
+
+        <motion.div
+          className="mt-10 grid gap-6 lg:mt-12 lg:grid-cols-3 lg:gap-5 lg:items-stretch"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.12, ease: EASE_OUT_EXPO }}
+        >
+          {PLANS.map((plan) => (
+            <PlanCard key={plan.id} plan={plan} billing={billing} />
+          ))}
+        </motion.div>
+
+        <p className="mt-10 text-center text-sm text-slate-500">
+          Prices shown in Nepalese Rupees (Rs). No credit card required to start
+          free.
+        </p>
       </div>
     </div>
   );
