@@ -39,7 +39,7 @@ export function Hero() {
           transition={{ delay: 0.5 }}
         >
           Inventory, IRD-compliant VAT billing, customer dues, and fiscal-year
-          reports — one platform for kirana shops, pharmacies, and wholesalers
+          reports, one platform for kirana shops, pharmacies, and wholesalers
           across Nepal.
         </motion.p>
 

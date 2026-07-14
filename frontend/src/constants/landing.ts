@@ -36,7 +36,7 @@ export const FEATURES: FeatureItem[] = [
     icon: "inventory",
     title: "Inventory tracking",
     description:
-      "Real-time stock with an audit ledger. Every sale, return, and adjustment is logged — no silent overwrites.",
+      "Real-time stock with an audit ledger. Every sale, return, and adjustment is logged and no silent overwrites.",
   },
   {
     icon: "invoice",
@@ -60,7 +60,7 @@ export const FEATURES: FeatureItem[] = [
     icon: "credit-note",
     title: "Credit notes",
     description:
-      "Full credit-note documents with their own number series — stock restored, customer balance adjusted.",
+      "Full credit-note documents with their own number series and stock restored, customer balance adjusted.",
   },
   {
     icon: "roles",

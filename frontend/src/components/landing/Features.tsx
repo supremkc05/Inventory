@@ -21,7 +21,7 @@ export function Features() {
             Everything your dokan needs
           </h2>
           <p className="mt-4 text-lg text-slate-600">
-            From paper khata to digital records — designed for how Nepali shops
+            From paper khata to digital records designed for how Nepali shops
             actually operate.
           </p>
         </FadeIn>

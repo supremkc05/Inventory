@@ -23,7 +23,7 @@ export function DashboardPreview() {
             Your shop at a glance
           </h2>
           <p className="mt-4 text-lg text-slate-600">
-            Daily sales, VAT totals, stock alerts, and dues — everything your
+            Daily sales, VAT totals, stock alerts, and dues everything your
             dokan needs, in one clean dashboard.
           </p>
         </FadeIn>
