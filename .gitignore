@@ -1,4 +1,12 @@
 .env
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+.env
 .venv/
 __pycache__/
 *.pyc
