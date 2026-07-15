@@ -23,6 +23,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: "Features", href: "#features" },
   { label: "Nepal-first", href: "#nepal" },
   { label: "How it works", href: "#how-it-works" },
+  { label: "Pricing", href: "/pricing" },
 ];
 
 export const HERO_STATS: HeroStat[] = [
