@@ -3,6 +3,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import PricingPage from "@/pages/PricingPage";
+import SalesPage from "@/pages/SalesPage";
 import SignupPage from "@/pages/SignupPage";
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/sales" element={<SalesPage />} />
       </Routes>
     </BrowserRouter>
   );

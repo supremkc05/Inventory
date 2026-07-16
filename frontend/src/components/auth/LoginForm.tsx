@@ -42,7 +42,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     await new Promise((r) => setTimeout(r, 600));
     setSubmitting(false);
     onSuccess?.();
-    navigate("/pricing");
+    navigate("/dashboard");
   };
 
   return (
