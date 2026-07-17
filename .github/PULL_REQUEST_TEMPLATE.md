@@ -17,6 +17,7 @@
 - [ ] Manual check in the browser (note pages/flows below)
 - [ ] Backend checks (if API/Django touched): `python manage.py check` / `pytest`
 - [ ] CI green on this PR (Frontend + Backend)
+- [ ] CodeRabbit review checked (or intentionally skipped)
 
 ### Manual verification
 <!-- e.g. Login → dashboard → Sales → create tax invoice overlay -->

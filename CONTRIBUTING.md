@@ -63,9 +63,32 @@ Suggested title format: same as a conventional commit subject, e.g. `feat(fronte
 
 ## Reviews
 
-- Prefer at least one review (human and/or AI Bugbot / security review) before merging to `main`
+- Prefer at least one review (human and/or AI Bugbot / CodeRabbit / security review) before merging to `main`
 - Address comments or explain why you won’t change something
 - Do not use `--force` on `main`
+
+## CodeRabbit AI review
+
+CodeRabbit is configured by `.coderabbit.yaml` in the repo root.
+
+Maintainers must install the GitHub App once:
+
+1. Go to <https://github.com/marketplace/coderabbit>
+2. Install CodeRabbit for this repository
+3. Open or update a pull request
+4. Confirm CodeRabbit comments or summary appear on the PR
+
+CodeRabbit reviews PRs automatically, except drafts and PRs labeled `do-not-review`.
+
+Useful PR comments:
+
+```text
+@coderabbitai review
+@coderabbitai summary
+@coderabbitai configuration
+```
+
+The `@coderabbitai configuration` command is useful after config changes because it shows the resolved settings CodeRabbit is using.
 
 ## Branch protection (maintainers)
 
