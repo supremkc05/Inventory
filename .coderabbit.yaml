@@ -1,0 +1,45 @@
+language: "en-US"
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    labels:
+      - "!do-not-review"
+    ignore_title_keywords:
+      - "WIP"
+      - "[skip review]"
+  path_filters:
+    - "!frontend/dist/**"
+    - "!frontend/node_modules/**"
+    - "!backend/**/__pycache__/**"
+    - "!.venv/**"
+    - "!*.png"
+    - "!*.jpg"
+    - "!*.jpeg"
+    - "!*.webp"
+    - "!*.gif"
+  path_instructions:
+    - path: "frontend/src/**"
+      instructions: |
+        Focus on React/TypeScript correctness, accessible UI behavior, routing regressions,
+        state management, and keeping dashboard/sales code maintainable.
+    - path: "backend/**"
+      instructions: |
+        Focus on tenant isolation, authentication/authorization, VAT correctness,
+        transaction safety, and Django ORM usage.
+    - path: ".github/**"
+      instructions: |
+        Review workflow syntax, least-privilege permissions, cache correctness,
+        and whether CI checks are practical for pull requests.
+    - path: "scripts/**"
+      instructions: |
+        Review shell scripts for portability, clear failures, and avoiding destructive commands.
+
+chat:
+  auto_reply: true
