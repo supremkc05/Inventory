@@ -9,7 +9,7 @@ type SidebarProps = {
   onClose?: () => void;
 };
 
-const READY_ROUTES = new Set(["/dashboard", "/sales"]);
+const READY_ROUTES = new Set(["/dashboard", "/sales", "/products"]);
 
 export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   return (
