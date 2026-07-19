@@ -3,6 +3,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import PricingPage from "@/pages/PricingPage";
+import ProductsPage from "@/pages/ProductsPage";
 import SalesPage from "@/pages/SalesPage";
 import SignupPage from "@/pages/SignupPage";
 
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/sales" element={<SalesPage />} />
+        <Route path="/products" element={<ProductsPage />} />
       </Routes>
     </BrowserRouter>
   );
