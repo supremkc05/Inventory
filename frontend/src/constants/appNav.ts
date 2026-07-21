@@ -4,4 +4,5 @@ export const APP_NAV = [
   { label: "Products", href: "/products" },
   { label: "Customers", href: "/customers" },
   { label: "Reports", href: "/reports" },
+  { label: "VAT calculator", href: "/vat-calculator" },
 ] as const;
