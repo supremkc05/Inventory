@@ -1,5 +1,6 @@
 export { DashboardShell } from "./DashboardShell";
 export { InvoicesTable } from "./InvoicesTable";
+export { LogoutConfirmDialog } from "./LogoutConfirmDialog";
 export { NewSaleOverlay } from "./NewSaleOverlay";
 export { PersonalSalesPanel } from "./PersonalSalesPanel";
 export { SalesPanel } from "./SalesPanel";
