@@ -1,0 +1,156 @@
+# backend/accounts/serializers.py
+from __future__ import annotations
+import re
+from django.contrib.auth import authenticate, get_user_model
+from django.db import transaction
+from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from accounts.models import Business
+
+User = get_user_model()
+
+PAN_RE = re.compile(r"^\d{9}$")
+
+
+class BusinessBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Business
+        fields = ("id", "name", "pan_vat_number", "address", "phone", "default_vat_rate")
+
+
+class UserBriefSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    business = BusinessBriefSerializer(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ("id", "email", "full_name", "role", "business")
+
+    def get_full_name(self, obj: User) -> str:
+        name = obj.get_full_name().strip()
+        return name or obj.username
+
+
+class SignupSerializer(serializers.Serializer):
+    business_name = serializers.CharField(max_length=255)
+    full_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True, min_length=8)
+    
+    # Required because Business.pan_vat_number is unique + non-blank.
+    # Change to required=False if you later allow blank PAN on Business.
+    
+    pan_vat_number = serializers.CharField(max_length=9)
+
+    def validate_email(self, value: str) -> str:
+        email = value.strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        if User.objects.filter(username__iexact=email).exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        return email
+
+    def validate_pan_vat_number(self, value: str) -> str:
+        pan = value.strip()
+        if not PAN_RE.match(pan):
+            raise serializers.ValidationError("PAN/VAT number must be exactly 9 digits.")
+        if Business.objects.filter(pan_vat_number=pan).exists():
+            raise serializers.ValidationError("This PAN/VAT number is already registered.")
+        return pan
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError(
+                {"confirm_password": "Passwords do not match."}
+            )
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data: dict) -> User:
+        business = Business.objects.create(
+            name=validated_data["business_name"].strip(),
+            pan_vat_number=validated_data["pan_vat_number"],
+        )
+
+        full_name = validated_data["full_name"].strip()
+        parts = full_name.split(None, 1)
+        first_name = parts[0]
+        last_name = parts[1] if len(parts) > 1 else ""
+
+        email = validated_data["email"]
+        user = User(
+            username=email,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            business=business,
+            role=User.Role.OWNER,
+        )
+        user.set_password(validated_data["password"])
+        user.save()
+        return user
+
+    def to_representation(self, instance: User) -> dict:
+        # Same claim shape as login (business_id + role on both tokens).
+        refresh = EmailTokenObtainPairSerializer.get_token(instance)
+        return {
+            "user": UserBriefSerializer(instance).data,
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+        }
+
+
+class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Login with email + password (frontend does not send username)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields.pop("username", None)
+        self.fields["email"] = serializers.EmailField()
+
+    @classmethod
+    def get_token(cls, user: User):
+        token = super().get_token(user)
+        token["business_id"] = user.business_id
+        token["role"] = user.role
+        return token
+
+    def validate(self, attrs: dict) -> dict:
+        email = attrs.get("email", "").strip().lower()
+        password = attrs.get("password", "")
+
+        if not email:
+            raise serializers.ValidationError({"email": "Email is required."})
+        if not password:
+            raise serializers.ValidationError({"password": "Password is required."})
+
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError(
+                {"email": "No account found with this email."}
+            )
+
+        if not user.is_active:
+            raise serializers.ValidationError(
+                {"email": "This account is inactive. Contact support."}
+            )
+
+        # Authenticate against username (= email on signup)
+        authed = authenticate(
+            request=self.context.get("request"),
+            username=user.username,
+            password=password,
+        )
+        if authed is None:
+            raise serializers.ValidationError(
+                {"password": "Incorrect password."}
+            )
+
+        refresh = self.get_token(authed)
+        return {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user": UserBriefSerializer(authed).data,
+        }
