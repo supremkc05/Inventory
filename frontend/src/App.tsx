@@ -1,11 +1,14 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import CustomersPage from "@/pages/CustomersPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import PricingPage from "@/pages/PricingPage";
 import ProductsPage from "@/pages/ProductsPage";
+import ReportsPage from "@/pages/ReportsPage";
 import SalesPage from "@/pages/SalesPage";
 import SignupPage from "@/pages/SignupPage";
+import VatCalculatorPage from "@/pages/VatCalculatorPage";
 
 export default function App() {
   return (
@@ -18,6 +21,9 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/sales" element={<SalesPage />} />
         <Route path="/products" element={<ProductsPage />} />
+        <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/vat-calculator" element={<VatCalculatorPage />} />
       </Routes>
     </BrowserRouter>
   );
