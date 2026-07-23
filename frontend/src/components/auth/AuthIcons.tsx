@@ -35,6 +35,17 @@ export function StoreIcon(props: IconProps) {
   );
 }
 
+export function IdCardIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden {...props}>
+      <path
+        d="M3.75 5.25A1.75 1.75 0 0 1 5.5 3.5h13a1.75 1.75 0 0 1 1.75 1.75v13a1.75 1.75 0 0 1-1.75 1.75h-13A1.75 1.75 0 0 1 3.75 18.25v-13Zm1.5.25v12.5h13.5V5.5H5.25ZM7.5 9.25h4.5v1.5H7.5v-1.5Zm0 3.5h6v1.5h-6v-1.5Zm9-2.25a1.75 1.75 0 1 1-1.75-1.75A1.75 1.75 0 0 1 16.5 10.5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 export function MailIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden {...props}>

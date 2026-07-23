@@ -1,11 +1,14 @@
+import { signup } from "@/api/auth";
 import { AuthInput } from "@/components/auth/AuthInput";
 import {
   GoogleIcon,
+  IdCardIcon,
   LockIcon,
   MailIcon,
   StoreIcon,
   UserIcon,
 } from "@/components/auth/AuthIcons";
+import { ApiError, mapDrfErrors } from "@/lib/api";
 import type { SignupFormValues } from "@/types/auth";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -16,12 +19,13 @@ export function SignupForm() {
     businessName: "",
     fullName: "",
     email: "",
+    panVatNumber: "",
     password: "",
     confirmPassword: "",
     acceptTerms: false,
   });
   const [errors, setErrors] = useState<
-    Partial<Record<keyof SignupFormValues, string>>
+    Partial<Record<keyof SignupFormValues | "form", string>>
   >({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -39,6 +43,11 @@ export function SignupForm() {
     if (!values.email.trim()) next.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
       next.email = "Enter a valid email";
+    }
+    const pan = values.panVatNumber.trim();
+    if (!pan) next.panVatNumber = "PAN/VAT number is required";
+    else if (!/^\d{9}$/.test(pan)) {
+      next.panVatNumber = "PAN must be exactly 9 digits";
     }
     if (!values.password) next.password = "Password is required";
     else if (values.password.length < 8) {
@@ -59,9 +68,48 @@ export function SignupForm() {
     if (!validate()) return;
 
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 700));
-    setSubmitting(false);
-    navigate("/pricing");
+    setErrors({});
+    try {
+      await signup({
+        business_name: values.businessName.trim(),
+        full_name: values.fullName.trim(),
+        email: values.email.trim().toLowerCase(),
+        password: values.password,
+        confirm_password: values.confirmPassword,
+        pan_vat_number: values.panVatNumber.trim(),
+      });
+      // Account created — user must log in before opening the app
+      navigate("/login", {
+        replace: true,
+        state: {
+          registered: true,
+          email: values.email.trim().toLowerCase(),
+        },
+      });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const mapped = mapDrfErrors(err.body, {
+          business_name: "businessName",
+          full_name: "fullName",
+          email: "email",
+          password: "password",
+          confirm_password: "confirmPassword",
+          pan_vat_number: "panVatNumber",
+        });
+        setErrors({
+          ...mapped,
+          form:
+            mapped.form ??
+            (Object.keys(mapped).length === 0
+              ? "Could not create account"
+              : undefined),
+        });
+      } else {
+        setErrors({ form: "Could not reach the server. Is the API running?" });
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -102,6 +150,22 @@ export function SignupForm() {
         icon={<MailIcon className="h-4 w-4" />}
         className="py-2.5"
         onChange={(e) => update("email", e.target.value)}
+      />
+
+      <AuthInput
+        label="PAN / VAT number"
+        name="panVatNumber"
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="9-digit PAN"
+        maxLength={9}
+        value={values.panVatNumber}
+        error={errors.panVatNumber}
+        icon={<IdCardIcon className="h-4 w-4" />}
+        className="py-2.5"
+        onChange={(e) =>
+          update("panVatNumber", e.target.value.replace(/\D/g, "").slice(0, 9))
+        }
       />
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -158,6 +222,12 @@ export function SignupForm() {
           </span>
         ) : null}
       </div>
+
+      {errors.form ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {errors.form}
+        </p>
+      ) : null}
 
       <button
         type="submit"
