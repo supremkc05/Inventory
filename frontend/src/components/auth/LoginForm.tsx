@@ -1,35 +1,63 @@
+import { login } from "@/api/auth";
 import { AuthInput } from "@/components/auth/AuthInput";
 import { GoogleIcon, LockIcon, MailIcon } from "@/components/auth/AuthIcons";
+import { ApiError, mapDrfErrors } from "@/lib/api";
+import { saveTokens } from "@/lib/authStorage";
 import type { LoginFormValues } from "@/types/auth";
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 type LoginFormProps = {
   onSuccess?: () => void;
 };
 
+type FieldErrors = Partial<Record<keyof LoginFormValues | "form", string>>;
+
+type LoginLocationState = {
+  from?: string;
+  registered?: boolean;
+  email?: string;
+};
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = (location.state as LoginLocationState | null) ?? null;
+
   const [values, setValues] = useState<LoginFormValues>({
-    email: "",
+    email: locationState?.email ?? "",
     password: "",
     remember: true,
   });
-  const [errors, setErrors] = useState<
-    Partial<Record<keyof LoginFormValues, string>>
-  >({});
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [justRegistered] = useState(Boolean(locationState?.registered));
 
-  const validate = () => {
-    const next: typeof errors = {};
-    if (!values.email.trim()) next.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
-      next.email = "Enter a valid email";
-    }
+  const setField = <K extends keyof LoginFormValues>(
+    key: K,
+    value: LoginFormValues[K],
+  ) => {
+    setValues((v) => ({ ...v, [key]: value }));
+    setErrors((prev) => {
+      if (!prev[key] && !prev.form) return prev;
+      const next = { ...prev };
+      delete next[key];
+      delete next.form;
+      return next;
+    });
+  };
+
+  const validate = (): boolean => {
+    const next: FieldErrors = {};
+    const email = values.email.trim();
+
+    if (!email) next.email = "Email is required";
+    else if (!EMAIL_RE.test(email)) next.email = "Enter a valid email address";
+
     if (!values.password) next.password = "Password is required";
-    else if (values.password.length < 6) {
-      next.password = "Password must be at least 6 characters";
-    }
+
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -39,14 +67,51 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     if (!validate()) return;
 
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setSubmitting(false);
-    onSuccess?.();
-    navigate("/dashboard");
+    setErrors({});
+    try {
+      const data = await login({
+        email: values.email.trim().toLowerCase(),
+        password: values.password,
+      });
+      saveTokens(data.access, data.refresh);
+      onSuccess?.();
+      const nextPath =
+        locationState?.from && locationState.from !== "/login"
+          ? locationState.from
+          : "/dashboard";
+      navigate(nextPath, { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const mapped = mapDrfErrors(err.body, {
+          email: "email",
+          password: "password",
+        });
+
+        if (mapped.email || mapped.password) {
+          setErrors(mapped);
+        } else {
+          setErrors({
+            form:
+              mapped.form ??
+              "Login failed. Check your email and password.",
+          });
+        }
+      } else {
+        setErrors({ form: "Could not reach the server. Is the API running?" });
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+      {justRegistered ? (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Account created. Please log in to continue.
+        </p>
+      ) : null}
+
       <AuthInput
         label="Email"
         name="email"
@@ -56,7 +121,17 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         value={values.email}
         error={errors.email}
         icon={<MailIcon className="h-4 w-4" />}
-        onChange={(e) => setValues((v) => ({ ...v, email: e.target.value }))}
+        onChange={(e) => setField("email", e.target.value)}
+        onBlur={() => {
+          const email = values.email.trim();
+          if (!email) return;
+          if (!EMAIL_RE.test(email)) {
+            setErrors((prev) => ({
+              ...prev,
+              email: "Enter a valid email address",
+            }));
+          }
+        }}
       />
 
       <div>
@@ -70,9 +145,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           error={errors.password}
           icon={<LockIcon className="h-4 w-4" />}
           showPasswordToggle
-          onChange={(e) =>
-            setValues((v) => ({ ...v, password: e.target.value }))
-          }
+          onChange={(e) => setField("password", e.target.value)}
         />
         <div className="mt-2 flex justify-end">
           <button
@@ -83,6 +156,12 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           </button>
         </div>
       </div>
+
+      {errors.form ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {errors.form}
+        </p>
+      ) : null}
 
       <button
         type="submit"

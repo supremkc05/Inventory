@@ -4,6 +4,7 @@ export { AuthInput } from "./AuthInput";
 export { AuthIllustration } from "./AuthIllustration";
 export { LoginForm } from "./LoginForm";
 export { SignupForm } from "./SignupForm";
+export { GuestRoute, ProtectedRoute } from "./ProtectedRoute";
 export {
   UserIcon,
   LockIcon,

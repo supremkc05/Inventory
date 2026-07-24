@@ -1,3 +1,71 @@
-from django.shortcuts import render
+"""Auth API views: signup, login, me."""
 
-# Create your views here.
+from rest_framework import status
+from rest_framework.generics import CreateAPIView, RetrieveAPIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+from accounts.serializers import (
+    EmailTokenObtainPairSerializer,
+    SignupSerializer,
+    UserBriefSerializer,
+)
+
+
+class SignupView(CreateAPIView):
+    """
+    POST /api/v1/auth/signup/
+
+    Body:
+      business_name, full_name, email, password, confirm_password, pan_vat_number
+
+    Returns 201: { user, access, refresh }
+    """
+
+    serializer_class = SignupSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class LoginView(TokenObtainPairView):
+    """
+    POST /api/v1/auth/login/
+
+    Body: { email, password }
+    Returns 200: { user, access, refresh }
+    """
+
+    serializer_class = EmailTokenObtainPairSerializer
+    permission_classes = [AllowAny]
+
+
+class RefreshView(TokenRefreshView):
+    """
+    POST /api/v1/auth/refresh/
+
+    Body: { refresh }
+    Returns 200: { access }  (and new refresh if ROTATE_REFRESH_TOKENS)
+    """
+
+    permission_classes = [AllowAny]
+
+
+class MeView(RetrieveAPIView):
+    """
+    GET /api/v1/auth/me/
+
+    Header: Authorization: Bearer <access>
+    Returns 200: { id, email, full_name, role, business }
+    """
+
+    serializer_class = UserBriefSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user

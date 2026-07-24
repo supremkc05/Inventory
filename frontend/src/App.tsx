@@ -1,4 +1,8 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import {
+  GuestRoute,
+  ProtectedRoute,
+} from "@/components/auth/ProtectedRoute";
 import CustomersPage from "@/pages/CustomersPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LandingPage from "@/pages/LandingPage";
@@ -15,15 +19,21 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
         <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/sales" element={<SalesPage />} />
-        <Route path="/products" element={<ProductsPage />} />
-        <Route path="/customers" element={<CustomersPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/vat-calculator" element={<VatCalculatorPage />} />
+
+        <Route element={<GuestRoute />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+        </Route>
+
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/sales" element={<SalesPage />} />
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/vat-calculator" element={<VatCalculatorPage />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );
