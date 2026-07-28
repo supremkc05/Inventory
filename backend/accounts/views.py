@@ -4,6 +4,8 @@ from rest_framework import status
 from rest_framework.generics import CreateAPIView, RetrieveAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from accounts.serializers import (
@@ -51,6 +53,28 @@ class LoginView(TokenObtainPairView):
     serializer_class = EmailTokenObtainPairSerializer
     permission_classes = [AllowAny]
     throttle_classes = [AuthLoginIPThrottle, AuthLoginEmailThrottle]
+
+class LogoutView(APIView):
+    """
+    POST /api/v1/auth/logout/
+    Body: { "refresh": "<refresh_token>" }
+    Blacklists the refresh token (access expires on its own ~15m).
+    """
+    permission_classes = [IsAuthenticated]  # or AllowAny if you prefer
+    def post(self, request, *args, **kwargs):
+        refresh = request.data.get("refresh")
+        if not refresh:
+            return Response(
+                {"refresh": "Refresh token is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            token = RefreshToken(refresh)
+            token.blacklist()
+        except TokenError:
+            # Already blacklisted / invalid / expired — still OK for logout UX
+            pass
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class RefreshView(TokenRefreshView):

@@ -1,21 +1,16 @@
 """Rate limits for auth endpoints (brute-force / credential stuffing)."""
 
-from rest_framework.throttling import SimpleRateThrottle
+from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
 
 
-class AuthLoginIPThrottle(SimpleRateThrottle):
+class AuthLoginIPThrottle(AnonRateThrottle):
     """Limit login attempts per client IP."""
 
     scope = "auth_login"
 
 
 class AuthLoginEmailThrottle(SimpleRateThrottle):
-    """
-    Limit login attempts per email address.
-
-    Stops credential stuffing from many IPs against one account.
-    Skips when email is missing (field validation handles that).
-    """
+    """Limit login attempts per email address."""
 
     scope = "auth_login_email"
 
@@ -29,13 +24,13 @@ class AuthLoginEmailThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
-class AuthSignupIPThrottle(SimpleRateThrottle):
+class AuthSignupIPThrottle(AnonRateThrottle):
     """Limit signup attempts per client IP."""
 
     scope = "auth_signup"
 
 
-class AuthRefreshIPThrottle(SimpleRateThrottle):
+class AuthRefreshIPThrottle(AnonRateThrottle):
     """Limit refresh attempts per client IP."""
 
     scope = "auth_refresh"
