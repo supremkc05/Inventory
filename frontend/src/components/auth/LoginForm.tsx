@@ -82,19 +82,26 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       navigate(nextPath, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
-        const mapped = mapDrfErrors(err.body, {
-          email: "email",
-          password: "password",
-        });
-
-        if (mapped.email || mapped.password) {
-          setErrors(mapped);
-        } else {
+        if (err.status === 429) {
           setErrors({
             form:
-              mapped.form ??
-              "Login failed. Check your email and password.",
+              typeof err.body.detail === "string"
+                ? err.body.detail
+                : "Too many login attempts. Please wait and try again.",
           });
+        } else {
+          const mapped = mapDrfErrors(err.body, {
+            email: "email",
+            password: "password",
+          });
+          // Required-field API errors can stay on fields; auth failures use one form message.
+          if (!mapped.form && (mapped.email || mapped.password)) {
+            setErrors(mapped);
+          } else {
+            setErrors({
+              form: mapped.form ?? "Invalid email or password.",
+            });
+          }
         }
       } else {
         setErrors({ form: "Could not reach the server. Is the API running?" });

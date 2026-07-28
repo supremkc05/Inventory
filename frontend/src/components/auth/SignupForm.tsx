@@ -88,22 +88,31 @@ export function SignupForm() {
       });
     } catch (err) {
       if (err instanceof ApiError) {
-        const mapped = mapDrfErrors(err.body, {
-          business_name: "businessName",
-          full_name: "fullName",
-          email: "email",
-          password: "password",
-          confirm_password: "confirmPassword",
-          pan_vat_number: "panVatNumber",
-        });
-        setErrors({
-          ...mapped,
-          form:
-            mapped.form ??
-            (Object.keys(mapped).length === 0
-              ? "Could not create account"
-              : undefined),
-        });
+        if (err.status === 429) {
+          setErrors({
+            form:
+              typeof err.body.detail === "string"
+                ? err.body.detail
+                : "Too many signup attempts. Please wait and try again.",
+          });
+        } else {
+          const mapped = mapDrfErrors(err.body, {
+            business_name: "businessName",
+            full_name: "fullName",
+            email: "email",
+            password: "password",
+            confirm_password: "confirmPassword",
+            pan_vat_number: "panVatNumber",
+          });
+          setErrors({
+            ...mapped,
+            form:
+              mapped.form ??
+              (Object.keys(mapped).length === 0
+                ? "Could not create account"
+                : undefined),
+          });
+        }
       } else {
         setErrors({ form: "Could not reach the server. Is the API running?" });
       }

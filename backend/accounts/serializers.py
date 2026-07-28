@@ -125,28 +125,29 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         if not password:
             raise serializers.ValidationError({"password": "Password is required."})
 
-        try:
-            user = User.objects.get(email__iexact=email)
-        except User.DoesNotExist:
-            raise serializers.ValidationError(
-                {"email": "No account found with this email."}
-            )
+        # Same message for missing / inactive / wrong password (no account enumeration).
+        invalid = serializers.ValidationError(
+            {"detail": "Invalid email or password."}
+        )
 
-        if not user.is_active:
-            raise serializers.ValidationError(
-                {"email": "This account is inactive. Contact support."}
+        user = User.objects.filter(email__iexact=email).first()
+        if user is None:
+            # Match Django's timing mitigation for nonexistent users.
+            authenticate(
+                request=self.context.get("request"),
+                username="__nonexistent__",
+                password=password,
             )
+            raise invalid
 
-        # Authenticate against username (= email on signup)
+        # authenticate() also rejects inactive users without a distinct error.
         authed = authenticate(
             request=self.context.get("request"),
             username=user.username,
             password=password,
         )
         if authed is None:
-            raise serializers.ValidationError(
-                {"password": "Incorrect password."}
-            )
+            raise invalid
 
         refresh = self.get_token(authed)
         return {

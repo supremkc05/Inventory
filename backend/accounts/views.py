@@ -11,6 +11,12 @@ from accounts.serializers import (
     SignupSerializer,
     UserBriefSerializer,
 )
+from accounts.throttles import (
+    AuthLoginEmailThrottle,
+    AuthLoginIPThrottle,
+    AuthRefreshIPThrottle,
+    AuthSignupIPThrottle,
+)
 
 
 class SignupView(CreateAPIView):
@@ -25,6 +31,7 @@ class SignupView(CreateAPIView):
 
     serializer_class = SignupSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [AuthSignupIPThrottle]
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -43,6 +50,7 @@ class LoginView(TokenObtainPairView):
 
     serializer_class = EmailTokenObtainPairSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [AuthLoginIPThrottle, AuthLoginEmailThrottle]
 
 
 class RefreshView(TokenRefreshView):
@@ -54,6 +62,7 @@ class RefreshView(TokenRefreshView):
     """
 
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRefreshIPThrottle]
 
 
 class MeView(RetrieveAPIView):
