@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
     "django_filters",
     "accounts",
@@ -85,7 +86,7 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": False,  # enable later with token_blacklist app
+    "BLACKLIST_AFTER_ROTATION": True,  # enable later with token_blacklist app
 }
 
 # Database
@@ -117,7 +118,36 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Auth rate limits (see accounts.throttles). Override via env if needed.
+    "DEFAULT_THROTTLE_RATES": {
+        "auth_login": os.getenv("THROTTLE_AUTH_LOGIN", "10/min"),
+        "auth_login_email": os.getenv("THROTTLE_AUTH_LOGIN_EMAIL", "5/min"),
+        "auth_signup": os.getenv("THROTTLE_AUTH_SIGNUP", "5/hour"),
+        "auth_refresh": os.getenv("THROTTLE_AUTH_REFRESH", "30/min"),
+    },
 }
+
+# Throttling uses Django's cache. LocMem is fine for single-process local
+# runserver; set REDIS_URL for multi-worker / production (shared counters).
+REDIS_URL = os.getenv("REDIS_URL", "").strip()
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            },
+            "KEY_PREFIX": "dokandaftar",
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "dokandaftar-throttle",
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

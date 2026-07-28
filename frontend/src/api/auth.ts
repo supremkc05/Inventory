@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api";
+import { getAccessToken } from "@/lib/authStorage";
 import type { AuthTokens, AuthUser } from "@/types/auth";
 
 export type LoginPayload = {
@@ -37,4 +38,19 @@ export function fetchMe(accessToken: string): Promise<AuthUser> {
   return apiFetch<AuthUser>("/api/v1/auth/me/", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+}
+
+export function logout(refreshToken: string): Promise<void> {
+  return apiFetch<void>("/api/v1/auth/logout/", {
+    method: "POST",
+    body: JSON.stringify({ refresh: refreshToken }),
+    headers: {
+      // if LogoutView is IsAuthenticated:
+      ...(getAccessToken()
+        ? { Authorization: `Bearer ${getAccessToken()}` }
+        : {}),
+    },
+  }).catch(() => {
+    // Network / already blacklisted — still clear local tokens
+  }) as Promise<void>;
 }

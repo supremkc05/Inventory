@@ -1,5 +1,6 @@
 import { LogoutConfirmDialog } from "@/components/dashboard/LogoutConfirmDialog";
-import { clearTokens } from "@/lib/authStorage";
+import { clearTokens, getRefreshToken } from "@/lib/authStorage";
+import { logout } from "@/api/auth";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -13,7 +14,11 @@ export function TopBar({ title, subtitle, onMenuClick }: TopBarProps) {
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const refresh = getRefreshToken();
+    if (refresh) {
+      await logout(refresh);
+    }
     clearTokens();
     navigate("/login", { replace: true });
   };
