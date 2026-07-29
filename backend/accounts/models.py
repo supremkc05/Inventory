@@ -1,3 +1,4 @@
+from enum import unique
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from core.models import TimeStampedModel
@@ -31,11 +32,10 @@ class User(AbstractUser):
         null=True,
         blank=True,  # allow null for first superuser
     )
-    role = models.CharField(
-        max_length=20,
-        choices=Role.choices,
-        default=Role.ADMIN,
-    )
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.ADMIN)
+   
+    #email is unique and indexed for faster lookups
+    email = models.EmailField(unique= True, db_index= True)
 
     def __str__(self):
         return self.username
