@@ -6,6 +6,8 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from accounts.models import Business
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 User = get_user_model()
 
@@ -62,8 +64,20 @@ class SignupSerializer(serializers.Serializer):
     def validate(self, attrs: dict) -> dict:
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError(
-                {"confirm_password": "Passwords do not match."}
-            )
+            {"confirm_password": "Passwords do not match."}
+        )
+
+    # Run Django AUTH_PASSWORD_VALIDATORS (not just min_length=8).
+        user = User(
+            username=attrs["email"],
+            email=attrs["email"],
+            first_name=attrs["full_name"].strip().split(None, 1)[0],
+        )
+        try:
+            validate_password(attrs["password"], user=user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"password": list(exc.messages)})
+
         return attrs
 
     @transaction.atomic
@@ -147,6 +161,9 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
             password=password,
         )
         if authed is None:
+            raise invalid
+
+        if user.business_id and not user.business.is_active:
             raise invalid
 
         refresh = self.get_token(authed)

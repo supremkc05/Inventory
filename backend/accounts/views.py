@@ -40,6 +40,10 @@ class SignupView(CreateAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    #only return the user data and no access and refresh tokens
+    def to_representation(self, instance) -> dict:
+        return {"user": UserBriefSerializer(instance).data}
 
 
 class LoginView(TokenObtainPairView):

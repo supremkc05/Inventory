@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "reports",
     "core",
     "parties",
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
@@ -60,7 +61,13 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
 ]
+
+CORS_ALLOWED_ORIGINS = [
+        o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o.strip()
+]
+
 
 ROOT_URLCONF = "config.urls"
 
