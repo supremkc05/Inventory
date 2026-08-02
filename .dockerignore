@@ -1,0 +1,16 @@
+.git
+.env
+**/.venv
+**/__pycache__
+**/*.pyc
+**/node_modules
+frontend/dist
+frontend/node_modules
+**/coverage
+**/.pytest_cache
+**/.mypy_cache
+**/.DS_Store
+todo.txt
+docs
+*.md
+!requirements.txt
