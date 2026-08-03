@@ -10,6 +10,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from accounts.serializers import (
     EmailTokenObtainPairSerializer,
+    InviteStaffSerializer,
     SignupSerializer,
     UserBriefSerializer,
 )
@@ -19,6 +20,7 @@ from accounts.throttles import (
     AuthRefreshIPThrottle,
     AuthSignupIPThrottle,
 )
+from core.permissions import IsOwner
 
 
 class SignupView(CreateAPIView):
@@ -28,7 +30,7 @@ class SignupView(CreateAPIView):
     Body:
       business_name, full_name, email, password, confirm_password, pan_vat_number
 
-    Returns 201: { user, access, refresh }
+    Returns 201: { user }  (no access/refresh — client must log in)
     """
 
     serializer_class = SignupSerializer
@@ -40,10 +42,6 @@ class SignupView(CreateAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
-    #only return the user data and no access and refresh tokens
-    def to_representation(self, instance) -> dict:
-        return {"user": UserBriefSerializer(instance).data}
 
 
 class LoginView(TokenObtainPairView):
@@ -106,3 +104,21 @@ class MeView(RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class InviteStaffView(CreateAPIView):
+    """
+    POST /api/v1/auth/invite/
+
+    Owner-only. Creates admin/accountant under the owner's business.
+    Client cannot assign a different business_id (ignored / not accepted).
+    """
+
+    serializer_class = InviteStaffSerializer
+    permission_classes = [IsAuthenticated, IsOwner]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

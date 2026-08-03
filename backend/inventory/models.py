@@ -35,13 +35,20 @@ class Product(TimeStampedModel):
     sku = models.CharField(max_length=50)
     name = models.CharField(max_length=255)
     unit = models.CharField(max_length=30, default="pcs")
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     selling_price = models.DecimalField(max_digits=12, decimal_places=2)
+    reorder_level = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     vat_applicable = models.BooleanField(default=True)
     vat_rate = models.DecimalField(max_digits=5, decimal_places=2, default=13.00)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         unique_together = ("business", "sku")
+        indexes = [
+            models.Index(fields=["business", "name"]),
+            models.Index(fields=["business", "is_active"]),
+            models.Index(fields=["business", "sku"]),
+        ]
 
     def __str__(self):
         return f"{self.sku} — {self.name}"
@@ -83,6 +90,11 @@ class StockMovement(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["business", "created_at"]),
+            models.Index(fields=["business", "product"]),
+            models.Index(fields=["product", "created_at"]),
+        ]
 
     def __str__(self):
         return f"{self.product_id} {self.quantity_delta} ({self.reason})"

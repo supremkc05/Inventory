@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
@@ -5,6 +6,7 @@ from accounts.models import Business, User
 
 class AuthApiTests(APITestCase):
     def setUp(self):
+        cache.clear()
         self.signup = reverse("auth-signup")
         self.login = reverse("auth-login")
         self.me = reverse("auth-me")
