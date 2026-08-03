@@ -106,13 +106,67 @@ class SignupSerializer(serializers.Serializer):
         return user
 
     def to_representation(self, instance: User) -> dict:
-        # Same claim shape as login (business_id + role on both tokens).
-        refresh = EmailTokenObtainPairSerializer.get_token(instance)
-        return {
-            "user": UserBriefSerializer(instance).data,
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-        }
+        # No JWTs on signup — client must log in afterward.
+        return {"user": UserBriefSerializer(instance).data}
+
+
+class InviteStaffSerializer(serializers.Serializer):
+    """Owner invites admin/accountant into their own business (B19)."""
+
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, min_length=8)
+    full_name = serializers.CharField(max_length=150)
+    role = serializers.ChoiceField(
+        choices=[User.Role.ADMIN, User.Role.ACCOUNTANT],
+    )
+
+    def validate_email(self, value: str) -> str:
+        email = value.strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        if User.objects.filter(username__iexact=email).exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        return email
+
+    def validate(self, attrs: dict) -> dict:
+        request = self.context.get("request")
+        inviter = getattr(request, "user", None)
+        if inviter is None or not inviter.business_id:
+            raise serializers.ValidationError(
+                {"detail": "You must belong to a business to invite staff."}
+            )
+
+        user = User(
+            username=attrs["email"],
+            email=attrs["email"],
+            first_name=attrs["full_name"].strip().split(None, 1)[0],
+        )
+        try:
+            validate_password(attrs["password"], user=user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"password": list(exc.messages)})
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data: dict) -> User:
+        inviter = self.context["request"].user
+        full_name = validated_data["full_name"].strip()
+        parts = full_name.split(None, 1)
+        email = validated_data["email"]
+        user = User(
+            username=email,
+            email=email,
+            first_name=parts[0],
+            last_name=parts[1] if len(parts) > 1 else "",
+            business=inviter.business,
+            role=validated_data["role"],
+        )
+        user.set_password(validated_data["password"])
+        user.save()
+        return user
+
+    def to_representation(self, instance: User) -> dict:
+        return {"user": UserBriefSerializer(instance).data}
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
