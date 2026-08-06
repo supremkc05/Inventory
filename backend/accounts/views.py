@@ -1,7 +1,7 @@
 """Auth API views: signup, login, me."""
 
 from rest_framework import status
-from rest_framework.generics import CreateAPIView, RetrieveAPIView
+from rest_framework.generics import CreateAPIView, RetrieveAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,6 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from accounts.serializers import (
+    BusinessProfileSerializer,
     EmailTokenObtainPairSerializer,
     InviteStaffSerializer,
     SignupSerializer,
@@ -21,6 +22,8 @@ from accounts.throttles import (
     AuthSignupIPThrottle,
 )
 from core.permissions import IsOwner
+from core.tenancy import get_user_business
+from rest_framework.exceptions import NotFound
 
 
 class SignupView(CreateAPIView):
@@ -122,3 +125,26 @@ class InviteStaffView(CreateAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class BusinessProfileView(RetrieveUpdateAPIView):
+    """
+    GET/PATCH /api/v1/business/
+
+    Returns the authenticated user's business.
+    PATCH is owner-only (name, PAN, address, phone, default_vat_rate).
+    """
+
+    serializer_class = BusinessProfileSerializer
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_permissions(self):
+        if self.request.method in ("GET", "HEAD", "OPTIONS"):
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsOwner()]
+
+    def get_object(self):
+        business = get_user_business(self.request.user)
+        if business is None:
+            raise NotFound("No business associated with this user.")
+        return business

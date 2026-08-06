@@ -249,3 +249,34 @@ class CreditNoteItem(models.Model):
 
     def __str__(self):
         return f"CN item {self.product_sku} x {self.quantity}"
+
+
+class IdempotencyRecord(models.Model):
+    """Sale-create idempotency keys per business (E38)."""
+
+    business = models.ForeignKey(
+        Business,
+        on_delete=models.CASCADE,
+        related_name="idempotency_records",
+    )
+    key = models.CharField(max_length=255)
+    sale = models.ForeignKey(
+        Sale,
+        on_delete=models.CASCADE,
+        related_name="idempotency_records",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["business", "key"],
+                name="uniq_idempotency_business_key",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["business", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.business_id}:{self.key}→sale {self.sale_id}"

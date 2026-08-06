@@ -1,0 +1,137 @@
+DokanDaftar — Backend work todos
+================================
+Status as of 2026-07-24
+
+DONE
+----
+- Business + User (roles) models + admin
+- Inventory models (Category, Product, Stock, StockMovement)
+- Auth API: signup / login / refresh / me
+- JWT claims: business_id, role
+- Signup creates Business + owner atomically
+- Field-level login validation (email / password)
+- Stub apps: parties, sales, payments, reports (empty models)
+- Stub TenantScopedQuerysetMixin in core/permissions.py (not wired yet)
+
+NOT DONE YET (vs projectfile.md)
+--------------------------------
+- Customers / Sales / Credit notes / Payments / DocumentCounter
+- Tenant isolation on real ViewSets
+- Role permission matrix
+- CORS, throttling, token blacklist
+- OpenAPI routes, health check, tests
+- BS/AD + fiscal year utils, VAT service, PDFs
+
+
+A. AUTH HARDENING & SECURITY (do next)
+--------------------------------------
+[x] A1. Close account enumeration — login reveals "no email" vs "wrong password"; use one generic message (or constant-time path)
+[x] A2. Rate-limit auth — DRF throttling / Redis on signup, login, refresh (brute-force / credential stuffing)
+[x] A3. Enable JWT blacklist — token_blacklist + BLACKLIST_AFTER_ROTATION=True; logout should blacklist refresh
+[x] A4. Password policy on signup — run Django AUTH_PASSWORD_VALIDATORS in SignupSerializer (not only min_length=8)
+[x] A5. Don't return tokens on signup (or ignore them) — matches "must login after signup"; reduces accidental auto-login
+[x] A6. Unique email at DB level — User.email unique + index (today uniqueness is app-level only)
+[x] A7. Normalize email — store lowercased; keep username=email consistent
+[x] A8. Validate inactive business — reject login if user.business.is_active is False
+[x] A9. CORS — django-cors-headers + CORS_ALLOWED_ORIGINS (required for non-proxy / prod)
+[-] A10. Secrets & prod settings — deferred (not needed now)
+[x] A11. Protect refresh — short access TTL (already 15m) + rotation + blacklist; consider refresh reuse detection
+[-] A12. Audit log — log failed logins, signup, logout (IP/user-agent) without storing passwords
+[–] A13. Admin lockdown — deferred (not needed now)
+[x] A14. Add auth tests — signup race on email/PAN, wrong password, inactive user, token claims, me 401/200
+
+
+B. MULTI-TENANCY & AUTHORIZATION
+--------------------------------
+[x] B15. Promote mixin to real base — TenantScopedViewSet using TenantScopedQuerysetMixin on every business-scoped API
+[x] B16. Role permissions — IsOwner / IsOwnerOrAdmin / IsAccountantReadOnly matching projectfile matrix
+[x] B17. Never trust JWT business_id alone — always filter by request.user.business_id from DB
+[x] B18. Object-level checks — ensure FK IDs in payloads belong to same tenant (IDOR defense)
+[x] B19. Forbid cross-tenant user create — only owner invites staff to their business
+
+
+C. DOMAIN SCHEMA (MVP DB)
+-------------------------
+[x] C20. Customer (parties) — name, phone, PAN optional, due balance, archive rules
+[x] C21. Sale + SaleItem — bill type, FY, invoice number, VAT snapshots, dual dates AD/BS
+[x] C22. CreditNote + CreditNoteItem — separate number series
+[x] C23. Payment — against Sale / customer dues
+[x] C24. DocumentCounter — locked (business, fiscal_year, document_type) with select_for_update
+[x] C25. Product gaps — cost / reorder if needed; stock movement reasons aligned with productfile
+[x] C26. Indexes — (business, …) on all hot filters; unique constraints as designed
+
+
+D. SERVICES (business logic, not fat views)
+-------------------------------------------
+[x] D27. VAT service — qty × price → round VAT to 2dp; exempt lines = 0
+[x] D28. Fiscal year + BS/AD helpers — Shrawan 1–Ashad 31; store both dates
+[x] D29. SalesService (atomic) — stock check → number lock → sale/items → stock movements → due balance
+[x] D30. PaymentService — never overpay due; update balances in one transaction
+[x] D31. Use Decimal everywhere — never float for money
+
+
+E. API SURFACE & QUALITY
+------------------------
+[x] E32. ViewSets — products, stock adjust, customers, sales, credit notes, payments
+[x] E33. Business profile API — owner-only update of name/PAN/address/phone/VAT rate
+[x] E34. Reports API — daily sales + VAT summary (accountant readable)
+[x] E35. OpenAPI — mount spectacular schema/swagger; generate frontend types later
+[x] E36. Consistent errors — field errors + problem detail shape; no stack traces in prod
+[x] E37. Pagination / filters / search — already defaulted; apply per endpoint carefully
+[x] E38. Idempotency (nice) — key on sale create to avoid double-submit duplicates
+[x] E39. Health endpoint — /api/v1/health/ (DB ping)
+
+
+F. ORM / DJANGO PERFORMANCE & SAFETY
+------------------------------------
+[ ] F40. select_related / prefetch_related — avoid N+1 on list/detail
+[ ] F41. transaction.atomic + row locks — stock and counters
+[ ] F42. F() / Case updates — atomic stock increments where possible
+[ ] F43. Constraints — DB CheckConstraint (qty ≥ 0, money ≥ 0) where useful
+[ ] F44. Soft-delete / archive — products/customers with history (match frontend rules)
+[ ] F45. Query timeouts / statement limits (prod) — protect against expensive reports
+
+
+G. ATTACK SURFACE CHECKLIST
+---------------------------
+[ ] G46. SQLi — stay on ORM/parameterized queries (no raw string SQL)
+[ ] G47. Mass assignment — serializers: never writable business/role from client on create unless owner invite
+[ ] G48. XSS — API JSON only; sanitize if you ever return HTML (PDFs)
+[ ] G49. CSRF — JWT in Authorization header (OK); if cookies later, set CSRF + SameSite
+[ ] G50. Path traversal / file upload — defer until logos; then validate type/size/storage
+[ ] G51. DoS — pagination max page size; throttle reports; limit payload size
+[ ] G52. Privilege escalation — accountant cannot mutate sales/stock; test matrix
+[ ] G53. Dependency scanning — pin deps; pip-audit / Dependabot
+
+
+H. OPS, TESTS, DOCS
+-------------------
+[ ] H54. Auth + tenant + VAT + numbering tests (unit + API)
+[ ] H55. Migration hygiene — run clean on fresh Postgres
+[ ] H56. Docker Compose — app + Postgres (+ Redis when throttling/Celery)
+[ ] H57. Env docs — CORS, JWT lifetimes, DEFAULT_VAT_RATE, secrets
+[ ] H58. PDF later — WeasyPrint tax invoice / abbreviated bill / credit note
+
+
+SUGGESTED ORDER
+---------------
+Phase 1 — Lock auth/security:     A1–A14, B15–B19
+Phase 2 — Finish schema:          C20–C26
+Phase 3 — Services + APIs:        D27–D31, E32–E39
+Phase 4 — Hardening & quality:    F40–F45, G46–G53, H54–H57
+Phase 5 — PDF / polish:           H58
+
+
+IMMEDIATE AUTH-PR PUNCH LIST (small)
+------------------------------------
+If the next PR is auth-only, prioritize:
+1. Rate limiting on auth endpoints
+2. Generic login error (anti-enumeration)
+3. Password validators on signup
+4. Unique email DB constraint + migration
+5. Token blacklist + logout endpoint
+6. CORS + spectacular URLs
+7. Auth API tests
+
+
+
