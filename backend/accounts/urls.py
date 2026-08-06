@@ -1,6 +1,7 @@
 from django.urls import path
 
 from accounts.views import (
+    BusinessProfileView,
     InviteStaffView,
     LoginView,
     LogoutView,

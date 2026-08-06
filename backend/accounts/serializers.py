@@ -226,3 +226,31 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
             "refresh": str(refresh),
             "user": UserBriefSerializer(authed).data,
         }
+
+
+class BusinessProfileSerializer(serializers.ModelSerializer):
+    """Owner updates business settings (E33)."""
+
+    class Meta:
+        model = Business
+        fields = (
+            "id",
+            "name",
+            "pan_vat_number",
+            "address",
+            "phone",
+            "default_vat_rate",
+            "is_active",
+        )
+        read_only_fields = ("id", "is_active")
+
+    def validate_pan_vat_number(self, value: str) -> str:
+        pan = value.strip()
+        if not PAN_RE.match(pan):
+            raise serializers.ValidationError("PAN/VAT number must be exactly 9 digits.")
+        qs = Business.objects.filter(pan_vat_number=pan)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("This PAN/VAT number is already registered.")
+        return pan
