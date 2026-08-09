@@ -6,7 +6,7 @@ type CustomerFormOverlayProps = {
   mode: "create" | "edit";
   customer?: Customer | null;
   onClose: () => void;
-  onSave: (values: CustomerFormValues, editingId?: string) => void;
+  onSave: (values: CustomerFormValues, editingId?: string) => void | Promise<void>;
 };
 
 const inputClass =
@@ -36,11 +36,13 @@ export function CustomerFormOverlay({
   const isCreate = mode === "create";
   const [values, setValues] = useState<CustomerFormValues>(emptyForm);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setValues(customer ? fromCustomer(customer) : emptyForm());
     setError(null);
+    setSaving(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -55,7 +57,7 @@ export function CustomerFormOverlay({
     value: CustomerFormValues[K],
   ) => setValues((prev) => ({ ...prev, [key]: value }));
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!values.name.trim()) {
       setError("Customer name is required.");
@@ -66,16 +68,24 @@ export function CustomerFormOverlay({
       setError("PAN must be 9 digits when provided.");
       return;
     }
-    onSave(
-      {
-        name: values.name.trim(),
-        phone: values.phone.trim(),
-        pan,
-        address: values.address.trim(),
-      },
-      customer?.id,
-    );
-    onClose();
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(
+        {
+          name: values.name.trim(),
+          phone: values.phone.trim(),
+          pan,
+          address: values.address.trim(),
+        },
+        customer?.id,
+      );
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save customer.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -153,9 +163,14 @@ export function CustomerFormOverlay({
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-red-600/20 hover:bg-red-700"
+              disabled={saving}
+              className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-red-600/20 hover:bg-red-700 disabled:opacity-60"
             >
-              {isCreate ? "Save customer" : "Save changes"}
+              {saving
+                ? "Saving…"
+                : isCreate
+                  ? "Save customer"
+                  : "Save changes"}
             </button>
           </div>
         </form>

@@ -10,7 +10,7 @@ type AdjustStockOverlayProps = {
     quantityDelta: number;
     reason: StockAdjustReason;
     notes: string;
-  }) => void;
+  }) => void | Promise<void>;
 };
 
 const REASONS: { value: StockAdjustReason; label: string }[] = [
@@ -34,6 +34,7 @@ export function AdjustStockOverlay({
   const [reason, setReason] = useState<StockAdjustReason>("adjustment");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -41,6 +42,7 @@ export function AdjustStockOverlay({
     setReason("adjustment");
     setNotes("");
     setError(null);
+    setSaving(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -50,7 +52,7 @@ export function AdjustStockOverlay({
 
   if (!open || !product) return null;
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const quantityDelta = Number(delta);
     if (!Number.isFinite(quantityDelta) || quantityDelta === 0) {
@@ -62,13 +64,21 @@ export function AdjustStockOverlay({
       setError("Stock cannot go below zero.");
       return;
     }
-    onSave({
-      productId: product.id,
-      quantityDelta,
-      reason,
-      notes: notes.trim() || REASONS.find((r) => r.value === reason)?.label || "",
-    });
-    onClose();
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        productId: product.id,
+        quantityDelta,
+        reason,
+        notes: notes.trim() || REASONS.find((r) => r.value === reason)?.label || "",
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not adjust stock.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -159,9 +169,10 @@ export function AdjustStockOverlay({
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-sky-600/15 hover:bg-sky-700"
+              className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-sky-600/15 hover:bg-sky-700 disabled:opacity-60"
+              disabled={saving}
             >
-              Save movement
+              {saving ? "Saving…" : "Save movement"}
             </button>
           </div>
         </form>

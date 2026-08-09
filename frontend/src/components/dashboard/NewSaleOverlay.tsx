@@ -1,85 +1,78 @@
 import { cn } from "@/lib/cn";
-import type {
-  PersonalSale,
-  PersonalSaleProduct,
-  SaleChannel,
-  TaxInvoiceProduct,
-  TaxInvoiceSale,
-} from "@/types/dashboard";
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { DEFAULT_VAT_RATE, roundMoney } from "@/lib/vat";
+import type { SaleChannel } from "@/types/dashboard";
+import type { Product } from "@/types/products";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 
-const VAT_RATE = 0.13;
+export type NewSaleSubmitPayload = {
+  billType: "tax_invoice" | "abbreviated";
+  /** Free-text buyer / business name for tax invoices. */
+  customerName: string;
+  notes: string;
+  paidInFull: boolean;
+  lines: { product_id: number; quantity: string; unit_price: string }[];
+};
 
 type NewSaleOverlayProps = {
   open: boolean;
   channel: SaleChannel;
+  products: Product[];
   onClose: () => void;
-  onSaveTax: (sale: TaxInvoiceSale) => void;
-  onSavePersonal: (sale: PersonalSale) => void;
+  onSubmit: (payload: NewSaleSubmitPayload) => Promise<void>;
 };
 
-type TaxLine = {
+type Line = {
   id: string;
-  name: string;
+  productId: string;
   qty: string;
-  listPriceNpr: string;
-  deductedPriceNpr: string;
-};
-
-type PersonalLine = {
-  id: string;
-  name: string;
-  qty: string;
-  priceNpr: string;
+  unitPrice: string;
+  query: string;
 };
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function emptyTaxLine(): TaxLine {
-  return {
-    id: newId(),
-    name: "",
-    qty: "1",
-    listPriceNpr: "",
-    deductedPriceNpr: "",
-  };
-}
-
-function emptyPersonalLine(): PersonalLine {
-  return { id: newId(), name: "", qty: "1", priceNpr: "" };
+function emptyLine(): Line {
+  return { id: newId(), productId: "", qty: "1", unitPrice: "", query: "" };
 }
 
 export function NewSaleOverlay({
   open,
   channel,
+  products,
   onClose,
-  onSaveTax,
-  onSavePersonal,
+  onSubmit,
 }: NewSaleOverlayProps) {
   const titleId = useId();
   const isTax = channel === "tax";
 
-  const [customer, setCustomer] = useState("");
+  const [customerName, setCustomerName] = useState("");
   const [invoiceType, setInvoiceType] = useState<"Tax Invoice" | "Abbreviated">(
     "Tax Invoice",
   );
   const [buyer, setBuyer] = useState("");
-  const [taxLines, setTaxLines] = useState<TaxLine[]>([emptyTaxLine()]);
-  const [personalLines, setPersonalLines] = useState<PersonalLine[]>([
-    emptyPersonalLine(),
-  ]);
+  const [lines, setLines] = useState<Line[]>([emptyLine()]);
+  const [paidInFull, setPaidInFull] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setCustomer("");
+    setCustomerName("");
     setBuyer("");
     setInvoiceType("Tax Invoice");
-    setTaxLines([emptyTaxLine()]);
-    setPersonalLines([emptyPersonalLine()]);
+    setLines([emptyLine()]);
+    setPaidInFull(true);
     setError(null);
+    setSaving(false);
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -88,79 +81,71 @@ export function NewSaleOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const catalog = useMemo(() => {
+    // Show all active products for both channels. Save still enforces stock.
+    return products.filter((p) => p.isActive);
+  }, [products]);
+
   if (!open) return null;
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (isTax) {
-      if (!customer.trim()) {
-        setError("Customer name is required.");
+    if (isTax && !customerName.trim()) {
+      setError("Customer name is required.");
+      return;
+    }
+
+    const prepared: NewSaleSubmitPayload["lines"] = [];
+    for (const line of lines) {
+      const product = catalog.find((p) => p.id === line.productId);
+      const qty = Number(line.qty);
+      const price = Number(line.unitPrice);
+      if (!product || !(qty > 0) || !(price >= 0) || line.unitPrice.trim() === "") {
+        setError("Pick a product and enter valid qty and price on every line.");
         return;
       }
-      const products: TaxInvoiceProduct[] = [];
-      for (const line of taxLines) {
-        const qty = Number(line.qty);
-        const list = Number(line.listPriceNpr);
-        const deducted = Number(line.deductedPriceNpr);
-        if (!line.name.trim() || !(qty > 0) || !(list >= 0) || !(deducted >= 0)) {
-          setError("Fill every product with a valid name, qty, and prices.");
-          return;
-        }
-        if (deducted > list) {
-          setError("Deducted price cannot be higher than list price.");
-          return;
-        }
-        products.push({
-          name: line.name.trim(),
-          qty,
-          listPriceNpr: list,
-          deductedPriceNpr: deducted,
-          vatNpr: Math.round(deducted * VAT_RATE * 100) / 100,
-        });
-      }
-      const seq = String(Math.floor(Math.random() * 9000) + 1000);
-      onSaveTax({
-        invoice: `2082/83-${seq}`,
-        customer: customer.trim(),
-        type: invoiceType,
-        status: "Paid",
-        products,
-      });
-    } else {
-      if (!buyer.trim()) {
-        setError("Buyer name is required.");
+      if (product.stockQty <= 0) {
+        setError(
+          `${product.name} has no stock. Adjust stock on the Products page first.`,
+        );
         return;
       }
-      const products: PersonalSaleProduct[] = [];
-      for (const line of personalLines) {
-        const qty = Number(line.qty);
-        const price = Number(line.priceNpr);
-        if (!line.name.trim() || !(qty > 0) || !(price >= 0)) {
-          setError("Fill every product with a valid name, qty, and price.");
-          return;
-        }
-        products.push({
-          name: line.name.trim(),
-          qty,
-          priceNpr: price,
-        });
+      if (qty > product.stockQty) {
+        setError(
+          `Insufficient stock for ${product.name} (have ${product.stockQty}).`,
+        );
+        return;
       }
-      const now = new Date();
-      const time = now.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-      });
-      onSavePersonal({
-        id: `PS-${Math.floor(Math.random() * 900) + 100}`,
-        buyer: buyer.trim(),
-        time,
-        status: "Paid",
-        products,
+      prepared.push({
+        product_id: Number(product.id),
+        quantity: String(qty),
+        unit_price: String(price),
       });
     }
-    onClose();
+
+    const payload: NewSaleSubmitPayload = {
+      billType: isTax
+        ? invoiceType === "Tax Invoice"
+          ? "tax_invoice"
+          : "abbreviated"
+        : "abbreviated",
+      customerName: isTax ? customerName.trim() : "",
+      notes: isTax ? "" : buyer.trim() || "Walk-in",
+      paidInFull,
+      lines: prepared,
+    };
+
+    setSaving(true);
+    try {
+      await onSubmit(payload);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save sale.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -186,7 +171,7 @@ export function NewSaleOverlay({
                 isTax ? "text-red-600" : "text-sky-700",
               )}
             >
-              {isTax ? "13% VAT" : "No VAT"}
+              {isTax ? "13% VAT" : "No VAT channel"}
             </p>
             <h2
               id={titleId}
@@ -195,9 +180,7 @@ export function NewSaleOverlay({
               {isTax ? "New tax invoice" : "New personal sale"}
             </h2>
             <p className="mt-0.5 text-sm text-slate-500">
-              {isTax
-                ? "Add products with list price, deducted price, and auto VAT."
-                : "Walk-in convenience sale — price only, tax-free."}
+              Type to search products by name or SKU.
             </p>
           </div>
           <button
@@ -210,174 +193,84 @@ export function NewSaleOverlay({
         </div>
 
         <form
-          onSubmit={handleSubmit}
+          onSubmit={(e) => void handleSubmit(e)}
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
-            {isTax ? (
-              <>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Customer">
-                    <input
-                      value={customer}
-                      onChange={(e) => setCustomer(e.target.value)}
-                      placeholder="Business or buyer name"
-                      className={inputClass}
-                    />
-                  </Field>
-                  <Field label="Invoice type">
-                    <select
-                      value={invoiceType}
-                      onChange={(e) =>
-                        setInvoiceType(
-                          e.target.value as "Tax Invoice" | "Abbreviated",
-                        )
-                      }
-                      className={inputClass}
-                    >
-                      <option value="Tax Invoice">Tax Invoice</option>
-                      <option value="Abbreviated">Abbreviated</option>
-                    </select>
-                  </Field>
-                </div>
-
-                <ProductSection
-                  title="Products"
-                  onAdd={() => setTaxLines((rows) => [...rows, emptyTaxLine()])}
-                >
-                  {taxLines.map((line, index) => (
-                    <div
-                      key={line.id}
-                      className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3"
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold text-slate-500">
-                          Line {index + 1}
-                        </p>
-                        {taxLines.length > 1 ? (
-                          <button
-                            type="button"
-                            className="text-xs font-semibold text-red-600 hover:text-red-700"
-                            onClick={() =>
-                              setTaxLines((rows) =>
-                                rows.filter((r) => r.id !== line.id),
-                              )
-                            }
-                          >
-                            Remove
-                          </button>
-                        ) : null}
-                      </div>
-                      <Field label="Product name">
-                        <input
-                          value={line.name}
-                          onChange={(e) =>
-                            setTaxLines((rows) =>
-                              rows.map((r) =>
-                                r.id === line.id
-                                  ? { ...r, name: e.target.value }
-                                  : r,
-                              ),
-                            )
-                          }
-                          placeholder="e.g. Basmati rice 25kg"
-                          className={inputClass}
-                        />
-                      </Field>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Field label="Qty">
-                          <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={line.qty}
-                            onChange={(e) =>
-                              setTaxLines((rows) =>
-                                rows.map((r) =>
-                                  r.id === line.id
-                                    ? { ...r, qty: e.target.value }
-                                    : r,
-                                ),
-                              )
-                            }
-                            className={inputClass}
-                          />
-                        </Field>
-                        <Field label="List (रू)">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={line.listPriceNpr}
-                            onChange={(e) =>
-                              setTaxLines((rows) =>
-                                rows.map((r) =>
-                                  r.id === line.id
-                                    ? { ...r, listPriceNpr: e.target.value }
-                                    : r,
-                                ),
-                              )
-                            }
-                            className={inputClass}
-                          />
-                        </Field>
-                        <Field label="Deducted (रू)">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={line.deductedPriceNpr}
-                            onChange={(e) =>
-                              setTaxLines((rows) =>
-                                rows.map((r) =>
-                                  r.id === line.id
-                                    ? {
-                                        ...r,
-                                        deductedPriceNpr: e.target.value,
-                                      }
-                                    : r,
-                                ),
-                              )
-                            }
-                            className={inputClass}
-                          />
-                        </Field>
-                      </div>
-                      {Number(line.deductedPriceNpr) > 0 ? (
-                        <p className="text-xs text-slate-500">
-                          VAT / unit:{" "}
-                          <span className="font-semibold text-red-600">
-                            रू{" "}
-                            {(
-                              Math.round(
-                                Number(line.deductedPriceNpr) * VAT_RATE * 100,
-                              ) / 100
-                            ).toLocaleString("en-NP")}
-                          </span>
-                        </p>
-                      ) : null}
-                    </div>
-                  ))}
-                </ProductSection>
-              </>
+            {catalog.length === 0 ? (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                No products in your catalog yet. Add one on the Products page,
+                then open this form again.
+              </p>
             ) : (
-              <>
-                <Field label="Buyer">
+              <p className="text-xs text-slate-500">
+                {catalog.length} product{catalog.length === 1 ? "" : "s"} in
+                catalog — type or click the product field to choose.
+              </p>
+            )}
+
+            {isTax ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Customer name">
                   <input
-                    value={buyer}
-                    onChange={(e) => setBuyer(e.target.value)}
-                    placeholder="Walk-in or customer name"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Business or buyer name"
                     className={inputClass}
+                    autoComplete="organization"
                   />
                 </Field>
+                <Field label="Invoice type">
+                  <select
+                    value={invoiceType}
+                    onChange={(e) =>
+                      setInvoiceType(
+                        e.target.value as "Tax Invoice" | "Abbreviated",
+                      )
+                    }
+                    className={inputClass}
+                  >
+                    <option value="Tax Invoice">Tax Invoice</option>
+                    <option value="Abbreviated">Abbreviated</option>
+                  </select>
+                </Field>
+              </div>
+            ) : (
+              <Field label="Buyer">
+                <input
+                  value={buyer}
+                  onChange={(e) => setBuyer(e.target.value)}
+                  placeholder="Walk-in or customer name"
+                  className={inputClass}
+                />
+              </Field>
+            )}
 
-                <ProductSection
-                  title="Products"
-                  onAdd={() =>
-                    setPersonalLines((rows) => [...rows, emptyPersonalLine()])
-                  }
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Products
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setLines((rows) => [...rows, emptyLine()])}
+                  className="text-sm font-semibold text-red-600 hover:text-red-700"
                 >
-                  {personalLines.map((line, index) => (
+                  + Add product
+                </button>
+              </div>
+              <div className="space-y-3">
+                {lines.map((line, index) => {
+                  const selected = catalog.find((p) => p.id === line.productId);
+                  const qty = Number(line.qty) || 0;
+                  const price = Number(line.unitPrice) || 0;
+                  const lineSub = roundMoney(qty * price);
+                  const lineVat =
+                    isTax && selected?.vatApplicable
+                      ? roundMoney(lineSub * DEFAULT_VAT_RATE)
+                      : 0;
+
+                  return (
                     <div
                       key={line.id}
                       className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3"
@@ -386,12 +279,12 @@ export function NewSaleOverlay({
                         <p className="text-xs font-semibold text-slate-500">
                           Line {index + 1}
                         </p>
-                        {personalLines.length > 1 ? (
+                        {lines.length > 1 ? (
                           <button
                             type="button"
                             className="text-xs font-semibold text-red-600 hover:text-red-700"
                             onClick={() =>
-                              setPersonalLines((rows) =>
+                              setLines((rows) =>
                                 rows.filter((r) => r.id !== line.id),
                               )
                             }
@@ -400,31 +293,48 @@ export function NewSaleOverlay({
                           </button>
                         ) : null}
                       </div>
-                      <Field label="Product name">
-                        <input
-                          value={line.name}
-                          onChange={(e) =>
-                            setPersonalLines((rows) =>
+                      <div className="space-y-1.5">
+                        <span className="text-xs font-semibold text-slate-600">
+                          Product
+                        </span>
+                        <ProductSearchField
+                          products={catalog}
+                          query={line.query}
+                          productId={line.productId}
+                          onQueryChange={(query) =>
+                            setLines((rows) =>
                               rows.map((r) =>
                                 r.id === line.id
-                                  ? { ...r, name: e.target.value }
+                                  ? { ...r, query, productId: "" }
                                   : r,
                               ),
                             )
                           }
-                          placeholder="e.g. Instant noodles"
-                          className={inputClass}
+                          onSelect={(product) =>
+                            setLines((rows) =>
+                              rows.map((r) =>
+                                r.id === line.id
+                                  ? {
+                                      ...r,
+                                      productId: product.id,
+                                      query: product.name,
+                                      unitPrice: String(product.sellingPriceNpr),
+                                    }
+                                  : r,
+                              ),
+                            )
+                          }
                         />
-                      </Field>
+                      </div>
                       <div className="grid grid-cols-2 gap-2">
                         <Field label="Qty">
                           <input
                             type="number"
-                            min="1"
-                            step="1"
+                            min="0.001"
+                            step="any"
                             value={line.qty}
                             onChange={(e) =>
-                              setPersonalLines((rows) =>
+                              setLines((rows) =>
                                 rows.map((r) =>
                                   r.id === line.id
                                     ? { ...r, qty: e.target.value }
@@ -435,17 +345,17 @@ export function NewSaleOverlay({
                             className={inputClass}
                           />
                         </Field>
-                        <Field label="Price (रू)">
+                        <Field label="Unit price (रू)">
                           <input
                             type="number"
                             min="0"
                             step="0.01"
-                            value={line.priceNpr}
+                            value={line.unitPrice}
                             onChange={(e) =>
-                              setPersonalLines((rows) =>
+                              setLines((rows) =>
                                 rows.map((r) =>
                                   r.id === line.id
-                                    ? { ...r, priceNpr: e.target.value }
+                                    ? { ...r, unitPrice: e.target.value }
                                     : r,
                                 ),
                               )
@@ -454,14 +364,53 @@ export function NewSaleOverlay({
                           />
                         </Field>
                       </div>
-                      <p className="text-xs font-medium text-sky-700">
-                        Tax-free · personal use
-                      </p>
+                      {selected ? (
+                        <p className="text-xs text-slate-500">
+                          Stock: {selected.stockQty} {selected.unit}
+                          {selected.stockQty <= 0 ? (
+                            <span className="font-semibold text-amber-700">
+                              {" "}
+                              · out of stock — adjust stock before saving
+                            </span>
+                          ) : null}
+                          {lineSub > 0 ? (
+                            <>
+                              {" "}
+                              · Line {isTax ? "excl. VAT" : "total"}: रू{" "}
+                              {lineSub.toLocaleString("en-NP")}
+                              {isTax ? (
+                                <>
+                                  {" "}
+                                  · VAT:{" "}
+                                  <span className="font-semibold text-red-600">
+                                    रू {lineVat.toLocaleString("en-NP")}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="font-medium text-sky-700">
+                                  {" "}
+                                  · tax-free
+                                </span>
+                              )}
+                            </>
+                          ) : null}
+                        </p>
+                      ) : null}
                     </div>
-                  ))}
-                </ProductSection>
-              </>
-            )}
+                  );
+                })}
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={paidInFull}
+                onChange={(e) => setPaidInFull(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              Mark as paid in full
+            </label>
 
             {error ? (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -480,14 +429,19 @@ export function NewSaleOverlay({
             </button>
             <button
               type="submit"
+              disabled={saving || catalog.length === 0}
               className={cn(
-                "rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition",
+                "rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-60",
                 isTax
                   ? "bg-red-600 shadow-red-600/20 hover:bg-red-700"
                   : "bg-sky-600 shadow-sky-600/15 hover:bg-sky-700",
               )}
             >
-              {isTax ? "Save invoice" : "Save personal sale"}
+              {saving
+                ? "Saving…"
+                : isTax
+                  ? "Save invoice"
+                  : "Save personal sale"}
             </button>
           </div>
         </form>
@@ -514,28 +468,96 @@ function Field({
   );
 }
 
-function ProductSection({
-  title,
-  onAdd,
-  children,
+function ProductSearchField({
+  products,
+  query,
+  productId,
+  onQueryChange,
+  onSelect,
 }: {
-  title: string;
-  onAdd: () => void;
-  children: React.ReactNode;
+  products: Product[];
+  query: string;
+  productId: string;
+  onQueryChange: (query: string) => void;
+  onSelect: (product: Product) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = !q
+      ? products
+      : products.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.sku.toLowerCase().includes(q),
+        );
+    return list.slice(0, 20);
+  }, [products, query]);
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="text-sm font-semibold text-red-600 hover:text-red-700"
-        >
-          + Add product
-        </button>
-      </div>
-      <div className="space-y-3">{children}</div>
+    <div ref={rootRef} className="relative">
+      <input
+        value={query}
+        onChange={(e) => {
+          onQueryChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
+        placeholder="Click or type name / SKU…"
+        className={inputClass}
+        autoComplete="off"
+        aria-autocomplete="list"
+        aria-expanded={open}
+      />
+      {open ? (
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+          {matches.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-slate-500">
+              {products.length === 0
+                ? "No products in catalog"
+                : "No match — try another name or SKU"}
+            </li>
+          ) : (
+            matches.map((p) => (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-slate-50",
+                    productId === p.id && "bg-red-50",
+                  )}
+                  onMouseDown={(e) => {
+                    // Prevent input blur before click registers.
+                    e.preventDefault();
+                  }}
+                  onClick={() => {
+                    onSelect(p);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="font-medium text-slate-900">{p.name}</span>
+                  <span className="text-xs text-slate-500">
+                    {p.sku} · stock {p.stockQty} {p.unit} · रू{" "}
+                    {p.sellingPriceNpr}
+                    {p.stockQty <= 0 ? " · out of stock" : ""}
+                  </span>
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      ) : null}
     </div>
   );
 }

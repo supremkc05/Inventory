@@ -8,27 +8,34 @@ import {
   DeleteCustomerDialog,
   RecordPaymentOverlay,
 } from "@/components/customers";
-import { DEMO_CUSTOMERS, MOCK_APP_ROLE } from "@/constants/customers";
+import {
+  archiveCustomer,
+  createCustomer,
+  listCustomers,
+  updateCustomer,
+} from "@/api/customers";
+import {
+  createPayment,
+  findUnpaidSaleForCustomer,
+} from "@/api/sales";
+import { ApiError } from "@/lib/api";
+import { getStoredRole } from "@/lib/authStorage";
 import {
   canManageCustomers,
   type Customer,
   type CustomerFormValues,
   type DueFilter,
 } from "@/types/customers";
-import { useMemo, useState } from "react";
-
-function newId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export default function CustomersPage() {
-  const canManage = canManageCustomers(MOCK_APP_ROLE);
-  const [customers, setCustomers] = useState<Customer[]>(DEMO_CUSTOMERS);
+  const canManage = canManageCustomers(getStoredRole());
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [due, setDue] = useState<DueFilter>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(
-    DEMO_CUSTOMERS.find((c) => c.isActive)?.id ?? null,
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
@@ -39,6 +46,30 @@ export default function CustomersPage() {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoadError(null);
+    try {
+      const rows = await listCustomers();
+      setCustomers(rows);
+      setSelectedId((prev) => {
+        if (prev && rows.some((c) => c.id === prev && c.isActive)) return prev;
+        return rows.find((c) => c.isActive)?.id ?? null;
+      });
+    } catch (err) {
+      setLoadError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not load customers. Is the API running?",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -60,74 +91,65 @@ export default function CustomersPage() {
     customers.find((c) => c.id === selectedId && c.isActive) ??
     null;
 
-  const handleSaveForm = (values: CustomerFormValues, editingId?: string) => {
-    if (editingId) {
-      setCustomers((prev) =>
-        prev.map((c) =>
-          c.id === editingId
-            ? {
-                ...c,
-                name: values.name,
-                phone: values.phone,
-                pan: values.pan,
-                address: values.address,
-              }
-            : c,
-        ),
-      );
-      return;
+  const handleSaveForm = async (
+    values: CustomerFormValues,
+    editingId?: string,
+  ) => {
+    try {
+      if (editingId) {
+        const updated = await updateCustomer(editingId, values);
+        setCustomers((prev) =>
+          prev.map((c) =>
+            c.id === editingId
+              ? {
+                  ...updated,
+                  payments: c.payments,
+                  sales: c.sales,
+                  dueBalanceNpr: c.dueBalanceNpr,
+                  hasTransactions: c.hasTransactions,
+                }
+              : c,
+          ),
+        );
+        return;
+      }
+      const created = await createCustomer(values);
+      setCustomers((prev) => [created, ...prev]);
+      setSelectedId(created.id);
+    } catch (err) {
+      throw err instanceof ApiError
+        ? err
+        : new Error("Could not save customer.");
     }
-    const created: Customer = {
-      id: newId("cus"),
-      name: values.name,
-      phone: values.phone,
-      pan: values.pan,
-      address: values.address,
-      dueBalanceNpr: 0,
-      isActive: true,
-      hasTransactions: false,
-      payments: [],
-      sales: [],
-    };
-    setCustomers((prev) => [created, ...prev]);
-    setSelectedId(created.id);
   };
 
-  const handlePayment = (input: {
+  const handlePayment = async (input: {
     customerId: string;
     amountNpr: number;
     notes: string;
   }) => {
-    setCustomers((prev) =>
-      prev.map((c) => {
-        if (c.id !== input.customerId) return c;
-        return {
-          ...c,
-          dueBalanceNpr: Math.max(0, c.dueBalanceNpr - input.amountNpr),
-          payments: [
-            {
-              id: newId("pay"),
-              amountNpr: input.amountNpr,
-              notes: input.notes,
-              createdAt: new Date().toISOString(),
-            },
-            ...c.payments,
-          ],
-        };
-      }),
-    );
+    const sale = await findUnpaidSaleForCustomer(input.customerId);
+    if (!sale) {
+      throw new Error(
+        "No unpaid sale found for this customer. Record a sale with due first.",
+      );
+    }
+    try {
+      await createPayment({
+        saleId: String(sale.id),
+        amount: String(input.amountNpr),
+        notes: input.notes,
+      });
+      await refresh();
+    } catch (err) {
+      throw err instanceof ApiError
+        ? err
+        : new Error("Could not record payment.");
+    }
   };
 
-  const handleDelete = (customer: Customer) => {
-    if (customer.hasTransactions) {
-      setCustomers((prev) =>
-        prev.map((c) =>
-          c.id === customer.id ? { ...c, isActive: false } : c,
-        ),
-      );
-      if (selectedId === customer.id) setSelectedId(null);
-      return;
-    }
+  const handleDelete = async (customer: Customer) => {
+    await archiveCustomer(customer.id);
     setCustomers((prev) => prev.filter((c) => c.id !== customer.id));
     if (selectedId === customer.id) setSelectedId(null);
   };
@@ -137,44 +159,69 @@ export default function CustomersPage() {
       title="Customers"
       subtitle="Contacts, PAN, and udhaaro dues"
     >
-      <CustomerInsights customers={customers} filteredCount={filtered.length} />
+      {loadError ? (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {loadError}{" "}
+          <button
+            type="button"
+            className="font-semibold underline"
+            onClick={() => {
+              setLoading(true);
+              void refresh();
+            }}
+          >
+            Retry
+          </button>
+        </p>
+      ) : null}
 
-      <CustomerFilters
-        search={search}
-        due={due}
-        canManage={canManage}
-        resultCount={filtered.length}
-        onSearchChange={setSearch}
-        onDueChange={setDue}
-        onAdd={() => {
-          setFormMode("create");
-          setEditing(null);
-          setFormOpen(true);
-        }}
-      />
+      {loading ? (
+        <p className="text-sm text-slate-500">Loading customers…</p>
+      ) : (
+        <>
+          <CustomerInsights
+            customers={customers}
+            filteredCount={filtered.length}
+          />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <CustomerTable
-          customers={filtered}
-          selectedId={selectedId}
-          canManage={canManage}
-          onSelect={(c) => setSelectedId(c.id)}
-          onEdit={(c) => {
-            setFormMode("edit");
-            setEditing(c);
-            setFormOpen(true);
-          }}
-          onPayment={(c) => {
-            setPayTarget(c);
-            setPayOpen(true);
-          }}
-          onDelete={(c) => {
-            setDeleteTarget(c);
-            setDeleteOpen(true);
-          }}
-        />
-        <CustomerDetailPanel customer={selected} />
-      </div>
+          <CustomerFilters
+            search={search}
+            due={due}
+            canManage={canManage}
+            resultCount={filtered.length}
+            onSearchChange={setSearch}
+            onDueChange={setDue}
+            onAdd={() => {
+              setFormMode("create");
+              setEditing(null);
+              setFormOpen(true);
+            }}
+          />
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+            <CustomerTable
+              customers={filtered}
+              selectedId={selectedId}
+              canManage={canManage}
+              onSelect={(c) => setSelectedId(c.id)}
+              onEdit={(c) => {
+                setFormMode("edit");
+                setEditing(c);
+                setFormOpen(true);
+              }}
+              onPayment={(c) => {
+                setPayTarget(c);
+                setPayOpen(true);
+              }}
+              onDelete={(c) => {
+                setDeleteTarget(c);
+                setDeleteOpen(true);
+              }}
+            />
+            <CustomerDetailPanel customer={selected} />
+          </div>
+        </>
+      )}
 
       {canManage ? (
         <>
@@ -204,7 +251,12 @@ export default function CustomersPage() {
               setDeleteOpen(false);
               setDeleteTarget(null);
             }}
-            onConfirm={handleDelete}
+            onConfirm={(customer) => {
+              void handleDelete(customer).then(() => {
+                setDeleteOpen(false);
+                setDeleteTarget(null);
+              });
+            }}
           />
         </>
       ) : null}

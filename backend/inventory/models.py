@@ -1,7 +1,17 @@
+import uuid
+
 from django.conf import settings
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from core.models import TimeStampedModel
 from accounts.models import Business
+
+
+def product_image_upload_to(instance, filename: str) -> str:
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
+    business_id = instance.business_id or "unknown"
+    return f"products/{business_id}/{uuid.uuid4().hex}.{ext}"
+
 
 class Category(TimeStampedModel):
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="categories")
@@ -41,6 +51,12 @@ class Product(TimeStampedModel):
     vat_applicable = models.BooleanField(default=True)
     vat_rate = models.DecimalField(max_digits=5, decimal_places=2, default=13.00)
     is_active = models.BooleanField(default=True)
+    image = models.ImageField(
+        upload_to=product_image_upload_to,
+        blank=True,
+        null=True,
+        validators=[FileExtensionValidator(["jpg", "jpeg", "png", "webp"])],
+    )
 
     class Meta:
         unique_together = ("business", "sku")

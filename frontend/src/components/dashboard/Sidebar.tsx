@@ -2,23 +2,36 @@ import { APP_NAV } from "@/constants/appNav";
 import { SITE } from "@/constants/landing";
 import logo from "@/assets/image.png";
 import { cn } from "@/lib/cn";
+import { getStoredUser } from "@/lib/authStorage";
 import { Link, NavLink } from "react-router-dom";
 
 type SidebarProps = {
   mobileOpen?: boolean;
   onClose?: () => void;
+  /** Logged-in business name; falls back to cached user / placeholder. */
+  storeName?: string;
 };
 
 const READY_ROUTES = new Set([
   "/dashboard",
   "/sales",
   "/products",
+  "/categories",
   "/customers",
   "/reports",
   "/vat-calculator",
 ]);
 
-export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
+export function Sidebar({
+  mobileOpen = false,
+  onClose,
+  storeName,
+}: SidebarProps) {
+  const businessName =
+    storeName?.trim() ||
+    getStoredUser()?.business?.name?.trim() ||
+    "Your store";
+
   return (
     <>
       {mobileOpen ? (
@@ -39,19 +52,24 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-5">
           <Link
             to="/dashboard"
-            className="flex items-center gap-2.5"
+            className="flex min-w-0 items-center gap-2.5"
             onClick={onClose}
           >
             <img
               src={logo}
               alt={SITE.name}
-              className="h-9 w-9 rounded-lg object-contain"
+              className="h-9 w-9 shrink-0 rounded-lg object-contain"
             />
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900">
                 Dokan<span className="text-red-600">Daftar</span>
               </p>
-              <p className="text-xs text-slate-500">{SITE.demoStore}</p>
+              <p
+                className="truncate text-xs text-slate-500"
+                title={businessName}
+              >
+                {businessName}
+              </p>
             </div>
           </Link>
         </div>

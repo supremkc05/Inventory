@@ -6,8 +6,8 @@ frontend/.env.local
 frontend/.env.development.local
 frontend/.env.test.local
 frontend/.env.production.local
-.env
 .venv/
+backend/media/
 __pycache__/
 *.pyc
 *.pyo

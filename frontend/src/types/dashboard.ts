@@ -17,6 +17,7 @@ export type TaxInvoiceSale = {
   type: "Tax Invoice" | "Abbreviated";
   status: PaymentStatus;
   products: TaxInvoiceProduct[];
+  saleId?: string;
 };
 
 /** Walk-in / personal convenience — no VAT on any line */

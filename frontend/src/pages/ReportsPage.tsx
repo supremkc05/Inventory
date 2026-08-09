@@ -1,14 +1,51 @@
+import { fetchReportSnapshot } from "@/api/reports";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
-import { PERIOD_OPTIONS, REPORT_BY_PERIOD } from "@/constants/reports";
+import { PERIOD_OPTIONS } from "@/constants/reports";
+import { ApiError } from "@/lib/api";
 import { formatNpr } from "@/lib/vat";
 import { cn } from "@/lib/cn";
-import type { ReportPeriod } from "@/types/reports";
+import type { ReportPeriod, ReportSnapshot } from "@/types/reports";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const EMPTY: ReportSnapshot = {
+  salesTotalNpr: 0,
+  invoiceCount: 0,
+  vatCollectedNpr: 0,
+  duesOutstandingNpr: 0,
+  personalSalesNpr: 0,
+};
 
 export default function ReportsPage() {
   const [period, setPeriod] = useState<ReportPeriod>("month");
-  const snap = REPORT_BY_PERIOD[period];
+  const [snap, setSnap] = useState<ReportSnapshot>(EMPTY);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void fetchReportSnapshot(period)
+      .then((data) => {
+        if (!cancelled) setSnap(data);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "Could not load reports. Is the API running?",
+        );
+        setSnap(EMPTY);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [period]);
 
   const cards = [
     {
@@ -30,9 +67,9 @@ export default function ReportsPage() {
       tone: snap.duesOutstandingNpr > 0 ? ("warn" as const) : ("neutral" as const),
     },
     {
-      label: "Personal sales",
+      label: "Exempt / personal",
       value: formatNpr(snap.personalSalesNpr),
-      hint: "No VAT channel",
+      hint: "Exempt subtotal in period",
       tone: "neutral" as const,
     },
   ];
@@ -44,7 +81,11 @@ export default function ReportsPage() {
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-slate-500">
-          Mock totals — wire to API aggregates later.
+          {loading
+            ? "Loading live totals…"
+            : error
+              ? error
+              : "Live totals from daily sales and VAT summary APIs."}
         </p>
         <div
           className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1"
@@ -102,7 +143,7 @@ export default function ReportsPage() {
         <h2 className="text-base font-semibold text-slate-900">Period notes</h2>
         <p className="mt-1 text-sm text-slate-500">
           Fiscal year follows Shrawan–Ashad. VAT is rounded per line at 13%.
-          Personal sales stay outside VAT totals.
+          Exempt lines stay outside VAT collected.
         </p>
         <dl className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">

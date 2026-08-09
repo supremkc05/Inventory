@@ -1,12 +1,58 @@
 import { AnimatedNumber } from "@/components/landing/DashboardPreview/AnimatedNumber";
-import { DASHBOARD_PAGE_STATS } from "@/constants/dashboard";
 import { cn } from "@/lib/cn";
 import { motion } from "framer-motion";
 
-export function StatGrid() {
+export type DashboardLiveStats = {
+  todaySalesNpr: number;
+  vatCollectedNpr: number;
+  personalSalesNpr: number;
+  lowStockCount: number;
+};
+
+type StatGridProps = {
+  stats: DashboardLiveStats;
+  loading?: boolean;
+};
+
+export function StatGrid({ stats, loading = false }: StatGridProps) {
+  const cards = [
+    {
+      label: "Today's sales",
+      value: stats.todaySalesNpr,
+      prefix: "रु ",
+      trend: loading ? "Loading…" : "Excl. VAT · today",
+      trendUp: true,
+    },
+    {
+      label: "VAT collected",
+      value: stats.vatCollectedNpr,
+      prefix: "रु ",
+      trend: loading ? "Loading…" : "Today (live)",
+      trendUp: true,
+    },
+    {
+      label: "Personal sales",
+      value: stats.personalSalesNpr,
+      prefix: "रु ",
+      trend: loading ? "Loading…" : "Excl. VAT · today",
+      trendUp: true,
+    },
+    {
+      label: "Low stock",
+      value: stats.lowStockCount,
+      suffix: " items",
+      trend: loading
+        ? "Loading…"
+        : stats.lowStockCount > 0
+          ? "Needs reorder"
+          : "All healthy",
+      trendUp: stats.lowStockCount === 0,
+    },
+  ];
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {DASHBOARD_PAGE_STATS.map((card, i) => (
+      {cards.map((card, i) => (
         <motion.article
           key={card.label}
           className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"

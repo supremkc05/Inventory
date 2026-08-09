@@ -10,7 +10,7 @@ type RecordPaymentOverlayProps = {
     customerId: string;
     amountNpr: number;
     notes: string;
-  }) => void;
+  }) => void | Promise<void>;
 };
 
 const inputClass =
@@ -26,12 +26,14 @@ export function RecordPaymentOverlay({
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setAmount("");
     setNotes("");
     setError(null);
+    setSaving(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -41,7 +43,7 @@ export function RecordPaymentOverlay({
 
   if (!open || !customer) return null;
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const amountNpr = Number(amount);
     if (!(amountNpr > 0)) {
@@ -52,12 +54,20 @@ export function RecordPaymentOverlay({
       setError("Payment cannot exceed outstanding due.");
       return;
     }
-    onSave({
-      customerId: customer.id,
-      amountNpr,
-      notes: notes.trim() || "Payment received",
-    });
-    onClose();
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        customerId: customer.id,
+        amountNpr,
+        notes: notes.trim() || "Payment received",
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not record payment.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -130,9 +140,10 @@ export function RecordPaymentOverlay({
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-sky-600/15 hover:bg-sky-700"
+              disabled={saving}
+              className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-sky-600/15 hover:bg-sky-700 disabled:opacity-60"
             >
-              Save payment
+              {saving ? "Saving…" : "Save payment"}
             </button>
           </div>
         </form>

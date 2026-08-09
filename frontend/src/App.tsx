@@ -4,6 +4,7 @@ import {
   ProtectedRoute,
 } from "@/components/auth/ProtectedRoute";
 import CustomersPage from "@/pages/CustomersPage";
+import CategoriesPage from "@/pages/CategoriesPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/vat-calculator" element={<VatCalculatorPage />} />
