@@ -71,10 +71,29 @@ export function ProductTable({
                   className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/80"
                 >
                   <td className="px-5 py-3.5">
-                    <p className="font-medium text-slate-900">{product.name}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {product.category} · {product.unit}
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                        {product.imageUrl ? (
+                          <img
+                            src={product.imageUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">
+                            —
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-900">
+                          {product.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {product.category || "Uncategorized"} · {product.unit}
+                        </p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-5 py-3.5 font-mono text-xs text-slate-600">
                     {product.sku}

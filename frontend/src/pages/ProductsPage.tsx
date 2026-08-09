@@ -7,7 +7,20 @@ import {
   ProductInsights,
   ProductTable,
 } from "@/components/products";
-import { DEMO_PRODUCTS, MOCK_APP_ROLE } from "@/constants/products";
+import {
+  createCategory,
+  listCategories,
+  type Category,
+} from "@/api/categories";
+import {
+  adjustStock,
+  archiveProduct,
+  createProduct,
+  listProducts,
+  updateProduct,
+} from "@/api/products";
+import { ApiError } from "@/lib/api";
+import { getStoredRole } from "@/lib/authStorage";
 import {
   canManageProducts,
   isLowStock,
@@ -15,18 +28,16 @@ import {
   type ProductFormValues,
   type StockAdjustReason,
   type StockLevelFilter,
-  type StockMovement,
   type VatFilter,
 } from "@/types/products";
-import { useMemo, useState } from "react";
-
-function newId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export default function ProductsPage() {
-  const canManage = canManageProducts(MOCK_APP_ROLE);
-  const [products, setProducts] = useState<Product[]>(DEMO_PRODUCTS);
+  const canManage = canManageProducts(getStoredRole());
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
@@ -43,11 +54,42 @@ export default function ProductsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
 
+  const refresh = useCallback(async () => {
+    setLoadError(null);
+    try {
+      const [rows, cats] = await Promise.all([
+        listProducts({ is_active: true }),
+        listCategories(),
+      ]);
+      setProducts(rows);
+      setCategories(cats);
+    } catch (err) {
+      setLoadError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not load products. Is the API running?",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter((p) => {
       if (!p.isActive) return false;
-      if (category !== "all" && p.category !== category) return false;
+      if (category === "none" && p.categoryId) return false;
+      if (
+        category !== "all" &&
+        category !== "none" &&
+        p.categoryId !== category
+      ) {
+        return false;
+      }
       if (vat === "applicable" && !p.vatApplicable) return false;
       if (vat === "exempt" && p.vatApplicable) return false;
       if (stock === "out" && p.stockQty > 0) return false;
@@ -60,95 +102,78 @@ export default function ProductsPage() {
     });
   }, [products, search, category, vat, stock]);
 
-  const handleSaveForm = (values: ProductFormValues, editingId?: string) => {
-    if (editingId) {
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === editingId
-            ? {
-                ...p,
-                name: values.name.trim(),
-                category: values.category,
-                sku: values.sku.trim(),
-                unit: values.unit,
-                costPriceNpr: Number(values.costPriceNpr),
-                sellingPriceNpr: Number(values.sellingPriceNpr),
-                vatApplicable: values.vatApplicable,
-                reorderLevel: Number(values.reorderLevel),
-              }
-            : p,
-        ),
-      );
-      return;
+  const handleSaveForm = async (
+    values: ProductFormValues,
+    editingId?: string,
+  ) => {
+    try {
+      if (editingId) {
+        const updated = await updateProduct(editingId, values);
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === editingId
+              ? { ...updated, stockQty: p.stockQty, movements: p.movements }
+              : p,
+          ),
+        );
+        await refresh();
+        return;
+      }
+      await createProduct(values);
+      await refresh();
+    } catch (err) {
+      throw err instanceof ApiError
+        ? err
+        : new Error("Could not save product.");
     }
-
-    const initialStock = Number(values.initialStock);
-    const movements: StockMovement[] =
-      initialStock > 0
-        ? [
-            {
-              id: newId("mov"),
-              quantityDelta: initialStock,
-              reason: "opening",
-              notes: "Opening stock",
-              createdAt: new Date().toISOString(),
-            },
-          ]
-        : [];
-
-    const created: Product = {
-      id: newId("prd"),
-      name: values.name.trim(),
-      category: values.category,
-      sku: values.sku.trim(),
-      unit: values.unit,
-      costPriceNpr: Number(values.costPriceNpr),
-      sellingPriceNpr: Number(values.sellingPriceNpr),
-      vatApplicable: values.vatApplicable,
-      reorderLevel: Number(values.reorderLevel),
-      stockQty: initialStock,
-      isActive: true,
-      hasTransactions: false,
-      movements,
-    };
-    setProducts((prev) => [created, ...prev]);
   };
 
-  const handleAdjustStock = (input: {
+  const handleAdjustStock = async (input: {
     productId: string;
     quantityDelta: number;
     reason: StockAdjustReason;
     notes: string;
   }) => {
-    setProducts((prev) =>
-      prev.map((p) => {
-        if (p.id !== input.productId) return p;
-        const movement: StockMovement = {
-          id: newId("mov"),
-          quantityDelta: input.quantityDelta,
-          reason: input.reason,
-          notes: input.notes,
-          createdAt: new Date().toISOString(),
-        };
-        return {
-          ...p,
-          stockQty: p.stockQty + input.quantityDelta,
-          movements: [movement, ...p.movements],
-        };
-      }),
-    );
+    try {
+      const { quantity } = await adjustStock(input);
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id !== input.productId) return p;
+          return {
+            ...p,
+            stockQty: quantity,
+            movements: [
+              {
+                id: `mov-${Date.now()}`,
+                quantityDelta: input.quantityDelta,
+                reason: input.reason,
+                notes: input.notes,
+                createdAt: new Date().toISOString(),
+              },
+              ...p.movements,
+            ],
+          };
+        }),
+      );
+    } catch (err) {
+      throw err instanceof ApiError
+        ? err
+        : new Error("Could not adjust stock.");
+    }
   };
 
-  const handleDelete = (product: Product) => {
-    if (product.hasTransactions) {
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === product.id ? { ...p, isActive: false } : p,
-        ),
-      );
-      return;
-    }
+  const handleDelete = async (product: Product) => {
+    await archiveProduct(product.id);
     setProducts((prev) => prev.filter((p) => p.id !== product.id));
+  };
+
+  const handleCreateCategory = async (name: string) => {
+    const created = await createCategory(name);
+    setCategories((prev) => {
+      if (prev.some((c) => c.id === created.id)) return prev;
+      return [...prev, created].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    return created;
   };
 
   return (
@@ -156,43 +181,69 @@ export default function ProductsPage() {
       title="Products"
       subtitle="Catalog, VAT, and stock ledger"
     >
-      <ProductInsights products={products} filteredCount={filtered.length} />
+      {loadError ? (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {loadError}{" "}
+          <button
+            type="button"
+            className="font-semibold underline"
+            onClick={() => {
+              setLoading(true);
+              void refresh();
+            }}
+          >
+            Retry
+          </button>
+        </p>
+      ) : null}
 
-      <ProductFilters
-        search={search}
-        category={category}
-        vat={vat}
-        stock={stock}
-        canManage={canManage}
-        resultCount={filtered.length}
-        onSearchChange={setSearch}
-        onCategoryChange={setCategory}
-        onVatChange={setVat}
-        onStockChange={setStock}
-        onAdd={() => {
-          setFormMode("create");
-          setEditing(null);
-          setFormOpen(true);
-        }}
-      />
+      {loading ? (
+        <p className="text-sm text-slate-500">Loading products…</p>
+      ) : (
+        <>
+          <ProductInsights
+            products={products}
+            filteredCount={filtered.length}
+          />
 
-      <ProductTable
-        products={filtered}
-        canManage={canManage}
-        onEdit={(product) => {
-          setFormMode("edit");
-          setEditing(product);
-          setFormOpen(true);
-        }}
-        onAdjustStock={(product) => {
-          setAdjustTarget(product);
-          setAdjustOpen(true);
-        }}
-        onDelete={(product) => {
-          setDeleteTarget(product);
-          setDeleteOpen(true);
-        }}
-      />
+          <ProductFilters
+            search={search}
+            category={category}
+            vat={vat}
+            stock={stock}
+            categories={categories}
+            canManage={canManage}
+            resultCount={filtered.length}
+            onSearchChange={setSearch}
+            onCategoryChange={setCategory}
+            onVatChange={setVat}
+            onStockChange={setStock}
+            onAdd={() => {
+              setFormMode("create");
+              setEditing(null);
+              setFormOpen(true);
+            }}
+          />
+
+          <ProductTable
+            products={filtered}
+            canManage={canManage}
+            onEdit={(product) => {
+              setFormMode("edit");
+              setEditing(product);
+              setFormOpen(true);
+            }}
+            onAdjustStock={(product) => {
+              setAdjustTarget(product);
+              setAdjustOpen(true);
+            }}
+            onDelete={(product) => {
+              setDeleteTarget(product);
+              setDeleteOpen(true);
+            }}
+          />
+        </>
+      )}
 
       {canManage ? (
         <>
@@ -200,11 +251,13 @@ export default function ProductsPage() {
             open={formOpen}
             mode={formMode}
             product={editing}
+            categories={categories}
             onClose={() => {
               setFormOpen(false);
               setEditing(null);
             }}
             onSave={handleSaveForm}
+            onCreateCategory={handleCreateCategory}
           />
           <AdjustStockOverlay
             open={adjustOpen}
@@ -222,7 +275,12 @@ export default function ProductsPage() {
               setDeleteOpen(false);
               setDeleteTarget(null);
             }}
-            onConfirm={handleDelete}
+            onConfirm={(product) => {
+              void handleDelete(product).then(() => {
+                setDeleteOpen(false);
+                setDeleteTarget(null);
+              });
+            }}
           />
         </>
       ) : null}

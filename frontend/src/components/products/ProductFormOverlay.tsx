@@ -1,26 +1,37 @@
-import {
-  PRODUCT_CATEGORIES,
-  PRODUCT_UNITS,
-} from "@/constants/products";
+import { PRODUCT_UNITS } from "@/constants/products";
 import { cn } from "@/lib/cn";
+import type { Category } from "@/api/categories";
 import type { Product, ProductFormValues } from "@/types/products";
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 type ProductFormOverlayProps = {
   open: boolean;
   mode: "create" | "edit";
   product?: Product | null;
+  categories: Category[];
   onClose: () => void;
-  onSave: (values: ProductFormValues, editingId?: string) => void;
+  onSave: (
+    values: ProductFormValues,
+    editingId?: string,
+  ) => void | Promise<void>;
+  onCreateCategory: (name: string) => Promise<Category>;
 };
 
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-red-600/20 placeholder:text-slate-400 focus:border-red-300 focus:ring-4";
 
+const NEW_CATEGORY = "__new__";
+
 function emptyForm(): ProductFormValues {
   return {
     name: "",
-    category: PRODUCT_CATEGORIES[0],
+    categoryId: "",
     sku: "",
     unit: "pcs",
     costPriceNpr: "",
@@ -28,13 +39,16 @@ function emptyForm(): ProductFormValues {
     vatApplicable: true,
     reorderLevel: "10",
     initialStock: "0",
+    imageFile: null,
+    clearImage: false,
+    existingImageUrl: null,
   };
 }
 
 function fromProduct(product: Product): ProductFormValues {
   return {
     name: product.name,
-    category: product.category,
+    categoryId: product.categoryId ?? "",
     sku: product.sku,
     unit: product.unit,
     costPriceNpr: String(product.costPriceNpr),
@@ -42,6 +56,9 @@ function fromProduct(product: Product): ProductFormValues {
     vatApplicable: product.vatApplicable,
     reorderLevel: String(product.reorderLevel),
     initialStock: "0",
+    imageFile: null,
+    clearImage: false,
+    existingImageUrl: product.imageUrl,
   };
 }
 
@@ -49,24 +66,45 @@ export function ProductFormOverlay({
   open,
   mode,
   product,
+  categories,
   onClose,
   onSave,
+  onCreateCategory,
 }: ProductFormOverlayProps) {
   const titleId = useId();
   const isCreate = mode === "create";
   const [values, setValues] = useState<ProductFormValues>(emptyForm);
+  const [categoryMode, setCategoryMode] = useState<string>("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setValues(product ? fromProduct(product) : emptyForm());
+    const next = product ? fromProduct(product) : emptyForm();
+    setValues(next);
+    setCategoryMode(next.categoryId || "");
+    setNewCategoryName("");
+    setPreviewUrl(null);
     setError(null);
+    setSaving(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, product, onClose]);
+
+  useEffect(() => {
+    if (!values.imageFile) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(values.imageFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [values.imageFile]);
 
   if (!open) return null;
 
@@ -75,7 +113,11 @@ export function ProductFormOverlay({
     value: ProductFormValues[K],
   ) => setValues((prev) => ({ ...prev, [key]: value }));
 
-  const handleSubmit = (e: FormEvent) => {
+  const shownImage =
+    previewUrl ||
+    (!values.clearImage ? values.existingImageUrl : null);
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!values.name.trim()) {
       setError("Product name is required.");
@@ -88,8 +130,15 @@ export function ProductFormOverlay({
     const cost = Number(values.costPriceNpr);
     const sale = Number(values.sellingPriceNpr);
     const reorder = Number(values.reorderLevel);
-    if (!(cost >= 0) || !(sale >= 0)) {
-      setError("Enter valid cost and sale prices.");
+    if (values.sellingPriceNpr.trim() === "" || !Number.isFinite(sale) || sale < 0) {
+      setError("Enter a valid sale price.");
+      return;
+    }
+    if (
+      values.costPriceNpr.trim() !== "" &&
+      (!Number.isFinite(cost) || cost < 0)
+    ) {
+      setError("Enter a valid cost price.");
       return;
     }
     if (!(reorder >= 0)) {
@@ -103,8 +152,26 @@ export function ProductFormOverlay({
         return;
       }
     }
-    onSave(values, product?.id);
-    onClose();
+    if (categoryMode === NEW_CATEGORY && !newCategoryName.trim()) {
+      setError("Enter a name for the new category.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      let categoryId = categoryMode === NEW_CATEGORY ? "" : categoryMode;
+      if (categoryMode === NEW_CATEGORY) {
+        const created = await onCreateCategory(newCategoryName.trim());
+        categoryId = created.id;
+      }
+      await onSave({ ...values, categoryId }, product?.id);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save product.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -123,12 +190,7 @@ export function ProductFormOverlay({
       >
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
           <div>
-            <p
-              className={cn(
-                "text-xs font-semibold uppercase tracking-wide",
-                "text-red-600",
-              )}
-            >
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-600">
               {isCreate ? "Catalog" : "Update"}
             </p>
             <h2
@@ -139,7 +201,7 @@ export function ProductFormOverlay({
             </h2>
             <p className="mt-0.5 text-sm text-slate-500">
               {isCreate
-                ? "Initial stock logs an opening movement — never a silent overwrite."
+                ? "Set category and optional photo for your store catalog."
                 : "Price & VAT apply to future sales. Adjust stock separately."}
             </p>
           </div>
@@ -152,8 +214,58 @@ export function ProductFormOverlay({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+            <Field label="Photo (optional)">
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                  {shownImage ? (
+                    <img
+                      src={shownImage}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-xs text-slate-400">No image</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="inline-flex cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                    {shownImage ? "Replace photo" : "Add photo"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        if (file && file.size > 2 * 1024 * 1024) {
+                          setError("Image must be 2 MB or smaller.");
+                          return;
+                        }
+                        update("imageFile", file);
+                        update("clearImage", false);
+                      }}
+                    />
+                  </label>
+                  {shownImage ? (
+                    <button
+                      type="button"
+                      className="text-left text-sm font-semibold text-red-600 hover:text-red-700"
+                      onClick={() => {
+                        update("imageFile", null);
+                        update("clearImage", true);
+                      }}
+                    >
+                      Remove photo
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </Field>
+
             <Field label="Name">
               <input
                 value={values.name}
@@ -166,15 +278,19 @@ export function ProductFormOverlay({
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Category">
                 <select
-                  value={values.category}
-                  onChange={(e) => update("category", e.target.value)}
+                  value={categoryMode}
+                  onChange={(e) => setCategoryMode(e.target.value)}
                   className={inputClass}
                 >
-                  {PRODUCT_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
+                  <option value="">Uncategorized</option>
+                  {categories
+                    .filter((c) => c.isActive)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  <option value={NEW_CATEGORY}>+ New category…</option>
                 </select>
               </Field>
               <Field label="SKU / barcode">
@@ -186,6 +302,17 @@ export function ProductFormOverlay({
                 />
               </Field>
             </div>
+
+            {categoryMode === NEW_CATEGORY ? (
+              <Field label="New category name">
+                <input
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className={inputClass}
+                  placeholder="e.g. Dairy"
+                />
+              </Field>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Unit">
@@ -305,9 +432,14 @@ export function ProductFormOverlay({
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-red-600/20 hover:bg-red-700"
+              disabled={saving}
+              className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-red-600/20 hover:bg-red-700 disabled:opacity-60"
             >
-              {isCreate ? "Save product" : "Save changes"}
+              {saving
+                ? "Saving…"
+                : isCreate
+                  ? "Save product"
+                  : "Save changes"}
             </button>
           </div>
         </form>

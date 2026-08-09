@@ -25,6 +25,7 @@ export type Product = {
   id: string;
   name: string;
   category: string;
+  categoryId: string | null;
   sku: string;
   unit: string;
   costPriceNpr: number;
@@ -36,11 +37,13 @@ export type Product = {
   /** True if used in any sale/purchase — blocks hard delete */
   hasTransactions: boolean;
   movements: StockMovement[];
+  imageUrl: string | null;
 };
 
 export type ProductFormValues = {
   name: string;
-  category: string;
+  /** Empty string = uncategorized */
+  categoryId: string;
   sku: string;
   unit: string;
   costPriceNpr: string;
@@ -49,6 +52,10 @@ export type ProductFormValues = {
   reorderLevel: string;
   /** Only used on create */
   initialStock: string;
+  imageFile: File | null;
+  clearImage: boolean;
+  /** Existing image preview URL when editing */
+  existingImageUrl: string | null;
 };
 
 export function canManageProducts(role: AppRole): boolean {

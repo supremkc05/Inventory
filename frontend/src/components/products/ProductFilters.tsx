@@ -1,12 +1,14 @@
-import { PRODUCT_CATEGORIES } from "@/constants/products";
 import { cn } from "@/lib/cn";
+import type { Category } from "@/api/categories";
 import type { StockLevelFilter, VatFilter } from "@/types/products";
+import { Link } from "react-router-dom";
 
 type ProductFiltersProps = {
   search: string;
   category: string;
   vat: VatFilter;
   stock: StockLevelFilter;
+  categories: Category[];
   canManage: boolean;
   resultCount: number;
   onSearchChange: (value: string) => void;
@@ -24,6 +26,7 @@ export function ProductFilters({
   category,
   vat,
   stock,
+  categories,
   canManage,
   resultCount,
   onSearchChange,
@@ -68,11 +71,14 @@ export function ProductFilters({
             className={fieldClass}
           >
             <option value="all">All categories</option>
-            {PRODUCT_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
+            <option value="none">Uncategorized</option>
+            {categories
+              .filter((c) => c.isActive)
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
           </select>
         </label>
         <label className="sm:w-40">
@@ -82,26 +88,39 @@ export function ProductFilters({
             onChange={(e) => onVatChange(e.target.value as VatFilter)}
             className={fieldClass}
           >
-            <option value="all">All VAT</option>
-            <option value="applicable">13% VAT</option>
+            <option value="all">Any VAT</option>
+            <option value="applicable">VAT on</option>
             <option value="exempt">Exempt</option>
           </select>
         </label>
-        {canManage ? (
-          <button
-            type="button"
-            onClick={onAdd}
-            className="shrink-0 rounded-xl bg-red-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-red-600/20 transition hover:bg-red-700"
-          >
-            Add product
-          </button>
-        ) : null}
       </div>
 
-      <p className={cn("text-sm text-slate-500")}>
-        <span className="font-semibold text-slate-800">{resultCount}</span>{" "}
-        results
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-500">
+          {resultCount} product{resultCount === 1 ? "" : "s"}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {canManage ? (
+            <Link
+              to="/categories"
+              className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Manage categories
+            </Link>
+          ) : null}
+          {canManage ? (
+            <button
+              type="button"
+              onClick={onAdd}
+              className={cn(
+                "rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-red-600/20 hover:bg-red-700",
+              )}
+            >
+              Add product
+            </button>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

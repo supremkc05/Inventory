@@ -1,11 +1,11 @@
+import { saveTokens, saveUser } from "@/lib/authStorage";
+import type { LoginFormValues } from "@/types/auth";
+import { useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { login } from "@/api/auth";
 import { AuthInput } from "@/components/auth/AuthInput";
 import { GoogleIcon, LockIcon, MailIcon } from "@/components/auth/AuthIcons";
 import { ApiError, mapDrfErrors } from "@/lib/api";
-import { saveTokens } from "@/lib/authStorage";
-import type { LoginFormValues } from "@/types/auth";
-import { useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
 
 type LoginFormProps = {
   onSuccess?: () => void;
@@ -25,6 +25,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = (location.state as LoginLocationState | null) ?? null;
+  const nextFromQuery = new URLSearchParams(location.search).get("next");
 
   const [values, setValues] = useState<LoginFormValues>({
     email: locationState?.email ?? "",
@@ -74,12 +75,19 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         password: values.password,
       });
       saveTokens(data.access, data.refresh);
+      saveUser(data.user);
       onSuccess?.();
-      const nextPath =
+      const fromState =
         locationState?.from && locationState.from !== "/login"
           ? locationState.from
-          : "/dashboard";
-      navigate(nextPath, { replace: true });
+          : null;
+      const fromQuery =
+        nextFromQuery &&
+        nextFromQuery.startsWith("/") &&
+        !nextFromQuery.startsWith("//")
+          ? nextFromQuery
+          : null;
+      navigate(fromQuery ?? fromState ?? "/dashboard", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 429) {
